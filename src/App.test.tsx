@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 
@@ -11,7 +11,7 @@ describe("portfolio dashboard", () => {
 
   it("shows an honest empty state and zero price coverage", () => {
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Build Your Private Portfolio" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Build Your Portfolio" })).toBeInTheDocument();
     expect(screen.getByText("0 of 0 EUR positions valued")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: ".metric-card.primary strong" })).toBeInTheDocument();
   });
@@ -65,7 +65,35 @@ describe("portfolio dashboard", () => {
     expect(screen.getByText("Previous Update")).toBeInTheDocument();
   });
 
-  it("uses the configured APY as a fallback when fund NAV is unavailable", () => {
+  it("shows raw market prices as the default historical chart", async () => {
+    const user = userEvent.setup();
+    const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 25, pricePerShare: 70, purchaseDate: "2026-07-13", fees: 0 }] }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-07T10:00:00Z", close: 78 }, { timestamp: "2026-07-13T10:00:00Z", close: 80 }] } }));
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
+
+    expect(screen.getByRole("heading", { name: "Market Price History" })).toBeInTheDocument();
+    await user.click(screen.getByText("View Chart Data as a Table"));
+    const table = screen.getByRole("table", { name: "Historical market prices" });
+    expect(within(table).getByText("€78.00")).toBeInTheDocument();
+    expect(within(table).queryByText("€1,950.00")).not.toBeInTheDocument();
+  });
+
+  it("automatically dismisses update notifications after 15 seconds", () => {
+    vi.useFakeTimers();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Load Public Sample" }));
+    expect(screen.getByText("Public VanEck sample loaded.")).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(15_000));
+
+    expect(screen.queryByText("Public VanEck sample loaded.")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("does not use a stored APY as a fund valuation when NAV is unavailable", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
     const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Daily fund NAV", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" };
@@ -73,7 +101,8 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getByText("2.28% APY")).toBeInTheDocument();
+    expect(screen.getByText("Market Data Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("2.28% APY")).not.toBeInTheDocument();
     expect(screen.queryByText("€100.20")).not.toBeInTheDocument();
     vi.useRealTimers();
   });
@@ -81,13 +110,13 @@ describe("portfolio dashboard", () => {
   it("uses cached fund NAV and shows Moneybase-style market return before fees", () => {
     const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
 
     render(<App />);
 
     expect(screen.getByText("€100.20")).toBeInTheDocument();
     expect(screen.getAllByText("€2.00").length).toBeGreaterThan(0);
-    expect(screen.getByText("Current APY 2.28%")).toBeInTheDocument();
+    expect(screen.queryByText(/Current APY/i)).not.toBeInTheDocument();
   });
 
   it("uses neutral market wording and Yahoo-only settings", async () => {
@@ -101,20 +130,18 @@ describe("portfolio dashboard", () => {
     expect(within(dialog).getByText(/Yahoo Finance/)).toBeInTheDocument();
   });
 
-  it("lets the user update the cash-fund APY locally", async () => {
+  it("automatically calculates the cash-fund annualised NAV yield", async () => {
     const user = userEvent.setup();
-    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", annualYieldPercentage: 2.28 };
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Open UMMEPSA details" }));
     const dialog = screen.getByRole("dialog", { name: /UMMEPSA/ });
-    const input = within(dialog).getByLabelText("APY (%)");
-    await user.clear(input);
-    await user.type(input, "2.5");
-    await user.click(within(dialog).getByRole("button", { name: "Save APY" }));
-
-    expect(window.localStorage.getItem("etf-tracker.portfolio.v1")).toContain('"annualYieldPercentage":2.5');
+    expect(within(dialog).getByText("7-Day Annualised NAV Yield")).toBeInTheDocument();
+    expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("APY (%)")).not.toBeInTheDocument();
   });
 
   it("does not present a missing fund APY as a real zero rate", () => {

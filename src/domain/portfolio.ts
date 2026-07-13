@@ -11,7 +11,6 @@ export function calculatePosition(
   instrument: Instrument,
   lots: PurchaseLot[],
   quote: MarketQuote | null,
-  valuationDate = new Date(),
 ): PositionMetrics {
   const totalShares = lots.reduce((sum, lot) => sum + lot.shares, 0);
   const purchaseCostExcludingFees = lots.reduce(
@@ -25,17 +24,8 @@ export function calculatePosition(
   const totalFees = lots.reduce((sum, lot) => sum + lot.fees, 0);
   const averagePurchasePrice =
     totalShares > 0 ? purchaseCostExcludingFees / totalShares : 0;
-  const yieldEstimate = instrument.assetType === "FUND" &&
-    instrument.annualYieldPercentage !== undefined
-    ? estimateYieldBalance(
-        lots,
-        instrument.annualYieldPercentage,
-        instrument.annualYieldHistory ?? [],
-        valuationDate,
-      )
-    : null;
-  // A published price/NAV is authoritative. APY accrual is an explicit fallback
-  // for a cash fund when provider NAV data is unavailable.
+  // A published price/NAV is authoritative. A yield percentage never values a
+  // fund position because a stale rate could silently invent a balance.
   const fundNavRatio = instrument.assetType === "FUND" && quote && averagePurchasePrice > 0
     ? quote.price / averagePurchasePrice
     : null;
@@ -44,7 +34,7 @@ export function calculatePosition(
     : null;
   const currentValue = costBasisWarning
     ? null
-    : quote ? totalShares * quote.price : yieldEstimate?.currentValue ?? null;
+    : quote ? totalShares * quote.price : null;
   const marketReturn = currentValue === null ? null : currentValue - purchaseCostExcludingFees;
   const marketReturnPercentage = marketReturn === null || purchaseCostExcludingFees <= 0
     ? null
@@ -56,12 +46,12 @@ export function calculatePosition(
     quote.previousClose == null
       ? null
       : totalShares * (quote.price - quote.previousClose)
-  ) : yieldEstimate?.dailyChange ?? null;
+  ) : null;
   const dailyChangePercentage = quote && !costBasisWarning ? (
     quote.previousClose == null || quote.previousClose <= 0
       ? null
       : ((quote.price - quote.previousClose) / quote.previousClose) * 100
-  ) : yieldEstimate?.dailyChangePercentage ?? null;
+  ) : null;
 
   return {
     instrument,
@@ -85,51 +75,6 @@ export function calculatePosition(
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
-function estimateYieldBalance(
-  lots: PurchaseLot[],
-  annualYieldPercentage: number,
-  annualYieldHistory: NonNullable<Instrument["annualYieldHistory"]>,
-  valuationDate: Date,
-): { currentValue: number; dailyChange: number; dailyChangePercentage: number } {
-  const valuationDay = Date.UTC(
-    valuationDate.getFullYear(),
-    valuationDate.getMonth(),
-    valuationDate.getDate(),
-  );
-  const rates = [...annualYieldHistory]
-    .map((rate) => ({
-      day: Date.parse(`${rate.effectiveDate}T00:00:00.000Z`),
-      rate: rate.annualYieldPercentage,
-    }))
-    .sort((left, right) => left.day - right.day);
-  const valueAtDay = (targetDay: number) => lots.reduce((sum, lot) => {
-    const purchaseDay = Date.parse(`${lot.purchaseDate}T00:00:00.000Z`);
-    if (targetDay < purchaseDay) return sum;
-
-    let value = lot.shares * lot.pricePerShare;
-    let cursor = purchaseDay;
-    let activeRate = rates.filter((rate) => rate.day <= purchaseDay).at(-1)?.rate ??
-      rates[0]?.rate ?? annualYieldPercentage;
-    for (const rate of rates.filter((item) => item.day > purchaseDay && item.day <= targetDay)) {
-      value *= (1 + activeRate / 100) ** ((rate.day - cursor) / DAY_MS / 365);
-      cursor = rate.day;
-      activeRate = rate.rate;
-    }
-    value *= (1 + activeRate / 100) ** ((targetDay - cursor) / DAY_MS / 365);
-    return sum + value;
-  }, 0);
-  const valueAtOffset = (dayOffset: number) => valueAtDay(valuationDay - dayOffset * DAY_MS);
-  const currentValue = valueAtOffset(0);
-  const previousValue = valueAtOffset(1);
-  const dailyChange = currentValue - previousValue;
-
-  return {
-    currentValue,
-    dailyChange,
-    dailyChangePercentage: previousValue > 0 ? (dailyChange / previousValue) * 100 : 0,
-  };
-}
-
 export interface PositionValuePoint {
   timestamp: string;
   investedValue: number;
@@ -140,6 +85,48 @@ export interface PeriodPerformance {
   value: number;
   percentage: number;
   referenceTimestamp: string;
+}
+
+export interface AnnualisedYield {
+  percentage: number;
+  days: number;
+  referenceTimestamp: string;
+  latestTimestamp: string;
+}
+
+/**
+ * Calculates a trailing annualised return from published NAV points. This is
+ * intentionally described as a NAV yield, not the fund provider's advertised
+ * APY, because it is derived independently from price history.
+ */
+export function calculateAnnualisedYield(
+  history: MarketPoint[],
+  trailingDays = 7,
+): AnnualisedYield | null {
+  if (!Number.isFinite(trailingDays) || trailingDays <= 0) return null;
+  const sorted = [...history]
+    .filter((point) => Number.isFinite(point.close) && point.close > 0 && Number.isFinite(Date.parse(point.timestamp)))
+    .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  const latest = sorted.at(-1);
+  if (!latest) return null;
+
+  const target = Date.parse(latest.timestamp) - trailingDays * DAY_MS;
+  const reference = sorted.filter((point) => Date.parse(point.timestamp) <= target).at(-1);
+  if (!reference) return null;
+  const days = (Date.parse(latest.timestamp) - Date.parse(reference.timestamp)) / DAY_MS;
+  // Weekends and market holidays can make the nearest usable point older than
+  // seven days. Beyond twice the requested window the result is too sparse to
+  // describe as a current trailing yield.
+  if (days <= 0 || days > trailingDays * 2 || reference.close <= 0) return null;
+  const percentage = ((latest.close / reference.close) ** (365 / days) - 1) * 100;
+  if (!Number.isFinite(percentage)) return null;
+
+  return {
+    percentage,
+    days,
+    referenceTimestamp: reference.timestamp,
+    latestTimestamp: latest.timestamp,
+  };
 }
 
 export function calculateChartDomain(
@@ -192,7 +179,7 @@ export function buildPositionValueHistory(
   lots: PurchaseLot[],
   history: MarketPoint[],
 ): PositionValuePoint[] {
-  return history.map((point) => {
+  return history.flatMap((point) => {
     const pointDate = point.timestamp.slice(0, 10);
     const ownedLots = lots.filter((lot) => lot.purchaseDate <= pointDate);
     const shares = ownedLots.reduce((sum, lot) => sum + lot.shares, 0);
@@ -201,11 +188,12 @@ export function buildPositionValueHistory(
       0,
     );
 
-    return {
+    if (shares <= 0) return [];
+    return [{
       timestamp: point.timestamp,
       investedValue,
       marketValue: shares * point.close,
-    };
+    }];
   });
 }
 

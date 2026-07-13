@@ -24,6 +24,12 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
+  await page.getByRole("button", { name: "Edit lot from 2026-01-02" }).click();
+  await expect(page.getByRole("dialog", { name: "Edit Purchase Lot" })).toBeVisible();
+  await expect(page.getByLabel("Shares")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Edit Purchase Lot" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Close details" })).toBeVisible();
 });
 
 test("purchase form is keyboard reachable", async ({ page }) => {

@@ -88,7 +88,7 @@ describe("portfolio storage", () => {
 
     const migrated = storage.savePortfolio(legacy).instruments[0];
     expect(migrated?.exchange).toBe("Moneybase Cash Fund");
-    expect(migrated?.annualYieldPercentage).toBe(2.28);
+    expect(migrated?.annualYieldPercentage).toBeUndefined();
     expect(migrated?.yahooSymbol).toBe("0P0001CD0Q.F");
   });
 

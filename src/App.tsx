@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, Trash2, Upload } from "lucide-react";
 import { DetailDialog } from "./components/DetailDialog";
 import { HoldingsTable } from "./components/HoldingsTable";
 import { ImportPreviewDialog } from "./components/ImportPreviewDialog";
@@ -9,7 +9,6 @@ import { SummaryCards } from "./components/SummaryCards";
 import { SAMPLE_PORTFOLIO } from "./config/samplePortfolio";
 import { createPortfolioStorage, exportPortfolioJson, importPortfolioJson } from "./data/storage";
 import { calculatePortfolioSummary, calculatePosition } from "./domain/portfolio";
-import { toLocalIsoDate } from "./format";
 import { fetchYahooRecord } from "./market/client";
 import { mergeHistory } from "./market/history";
 import { isValidMarketRecord, resolveMarketData } from "./market/service";
@@ -98,6 +97,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 15_000);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   function addLot(instrument: Instrument, lot: PurchaseLot) {
     const exists = portfolio.instruments.some((item) => item.id === instrument.id);
     persist({ ...portfolio, instruments: exists ? portfolio.instruments : [...portfolio.instruments, instrument], lots: [...portfolio.lots, lot] });
@@ -124,30 +129,6 @@ export default function App() {
     if (instrument) void refreshOne(instrument);
   }
 
-  function saveAnnualYield(instrumentId: string, annualYieldPercentage: number) {
-    if (!Number.isFinite(annualYieldPercentage) || annualYieldPercentage < 0) return;
-    const effectiveDate = toLocalIsoDate();
-    const instrumentLots = portfolio.lots.filter((lot) => lot.instrumentId === instrumentId);
-    const next = {
-      ...portfolio,
-      instruments: portfolio.instruments.map((instrument) => instrument.id === instrumentId
-        ? {
-            ...instrument,
-            annualYieldPercentage,
-            annualYieldHistory: updateAnnualYieldHistory(
-              instrument.annualYieldHistory,
-              instrument.annualYieldPercentage ?? 0,
-              annualYieldPercentage,
-              effectiveDate,
-              instrumentLots.map((lot) => lot.purchaseDate).sort()[0] ?? effectiveDate,
-            ),
-          }
-        : instrument),
-    };
-    persist(next);
-    setNotice("Cash-fund APY updated.");
-  }
-
   function exportData() {
     const blob = new Blob([exportPortfolioJson(portfolio)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
@@ -167,35 +148,19 @@ export default function App() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#main">Skip to portfolio</a>
-    <header className="topbar"><a className="brand" href="./" aria-label="Portfolio home"><span>V</span><div><strong>Valeo</strong><small>Personal Portfolio</small></div></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> Settings</button><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add Purchase</button></nav></header>
+    <header className="topbar"><a className="brand" href="./" aria-label="ETF Portfolio Tracker home"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="ETF Portfolio Tracker" /></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> Settings</button><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add Purchase</button></nav></header>
     {!navigator.onLine && <div className="global-banner" role="status">You are offline. Cached or manual prices may still be available.</div>}
     {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}>×</button></div>}
     <main id="main">
-      <div className="page-heading"><div><p className="eyebrow">Private · Local to This Browser</p><h1>Portfolio Dashboard</h1><p>Market data with source and update time shown.</p></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
+      <div className="page-heading"><div><p className="eyebrow">EUR Investment Overview</p><h1>Portfolio Dashboard</h1><p>Market data with source and update time shown.</p></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
       <SummaryCards summary={summary} positions={positions} />
-      {!positions.length ? <section className="empty-state"><div className="empty-icon"><ShieldCheck /></div><p className="eyebrow">Nothing Leaves Your Device</p><h2>Build Your Private Portfolio</h2><p>Add a purchase or import the private JSON template. Purchase details stay in localStorage and never go to market providers.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
+      {!positions.length ? <section className="empty-state"><div className="empty-icon"><ChartNoAxesCombined /></div><p className="eyebrow">Get Started</p><h2>Build Your Portfolio</h2><p>Add a purchase or import your portfolio JSON file to begin tracking your investments.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
       <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local Data</p><h2 id="data-title">Import, Export and Recovery</h2><p>Exports contain instruments and purchase lots only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear Portfolio</button></div></section>
     </main>
-    <footer className="site-footer"><p><ShieldCheck /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
+    <footer className="site-footer"><p>Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} onSave={addLot} />}
     {settingsOpen && <SettingsDialog value={settings} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />}
-    {selected && <DetailDialog position={selected} record={records[selected.instrument.id] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} onAnnualYieldSave={(value) => saveAnnualYield(selected.instrument.id, value)} />}
+    {selected && <DetailDialog position={selected} record={records[selected.instrument.id] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} />}
     {importPreview && <ImportPreviewDialog portfolio={importPreview} onCancel={() => setImportPreview(null)} onApply={applyImport} />}
   </div>;
-}
-
-function updateAnnualYieldHistory(
-  history: Instrument["annualYieldHistory"],
-  previousRate: number,
-  nextRate: number,
-  effectiveDate: string,
-  firstDepositDate: string,
-) {
-  const seeded = history?.length
-    ? history
-    : [{ effectiveDate: firstDepositDate, annualYieldPercentage: previousRate }];
-  return [
-    ...seeded.filter((rate) => rate.effectiveDate !== effectiveDate),
-    { effectiveDate, annualYieldPercentage: nextRate },
-  ].sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate));
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPositionValueHistory,
+  calculateAnnualisedYield,
   calculateChartDomain,
   calculatePeriodPerformance,
   calculatePortfolioSummary,
@@ -71,7 +72,7 @@ describe("calculatePosition", () => {
     expect(position.dailyChangePercentage).toBeNull();
   });
 
-  it("estimates a money-market balance from deposit cost and configurable APY", () => {
+  it("does not invent a money-market balance from a stored yield percentage", () => {
     const fund: Instrument = {
       id: "ummepsa-nav-eur",
       name: "UBS (Irl) Select Money Market Fund — EUR P Acc",
@@ -87,13 +88,13 @@ describe("calculatePosition", () => {
       { id: "cash-1", instrumentId: fund.id, shares: 10, pricePerShare: 100, purchaseDate: "2025-06-13", fees: 0 },
     ];
 
-    const position = calculatePosition(fund, lots, null, new Date("2026-07-13T12:00:00Z"));
+    const position = calculatePosition(fund, lots, null);
 
     expect(position.totalCost).toBe(1_000);
-    expect(position.currentValue).toBeCloseTo(1_025, 0);
-    expect(position.profitLoss).toBeCloseTo(25, 0);
-    expect(position.dailyChange).toBeGreaterThan(0);
-    expect(position.dailyChangePercentage).toBeCloseTo(2.28 / 365, 2);
+    expect(position.currentValue).toBeNull();
+    expect(position.profitLoss).toBeNull();
+    expect(position.dailyChange).toBeNull();
+    expect(position.dailyChangePercentage).toBeNull();
   });
 
   it("uses the published fund NAV before the APY estimate", () => {
@@ -119,7 +120,7 @@ describe("calculatePosition", () => {
       exchange: "Daily Fund NAV",
     };
 
-    const position = calculatePosition(fund, lots, navQuote, new Date("2026-07-13T12:00:00Z"));
+    const position = calculatePosition(fund, lots, navQuote);
 
     expect(position.currentValue).toBeCloseTo(1_002, 6);
     expect(position.marketReturn).toBeCloseTo(2, 6);
@@ -150,7 +151,7 @@ describe("calculatePosition", () => {
     expect(position.costBasisWarning).toMatch(/not comparable with the current NAV/i);
   });
 
-  it("applies later cash-fund APY changes only from their effective dates", () => {
+  it("keeps legacy yield history from affecting valuation without NAV", () => {
     const fund: Instrument = {
       ...instrument,
       id: "cash",
@@ -165,10 +166,8 @@ describe("calculatePosition", () => {
       { id: "cash-1", instrumentId: fund.id, shares: 100, pricePerShare: 10, purchaseDate: "2026-01-01", fees: 0 },
     ];
 
-    const position = calculatePosition(fund, lots, null, new Date("2026-07-11T12:00:00Z"));
-    const expected = 1_000 * 1.02 ** (181 / 365) * 1.03 ** (10 / 365);
-
-    expect(position.currentValue).toBeCloseTo(expected, 6);
+    const position = calculatePosition(fund, lots, null);
+    expect(position.currentValue).toBeNull();
   });
 });
 
@@ -228,6 +227,21 @@ describe("buildPositionValueHistory", () => {
     ]);
   });
 
+  it("omits dates before the first purchase instead of plotting a false zero", () => {
+    const lots: PurchaseLot[] = [
+      { id: "lot-1", instrumentId: instrument.id, shares: 10, pricePerShare: 70, purchaseDate: "2026-01-04", fees: 2 },
+    ];
+
+    const history = buildPositionValueHistory(lots, [
+      { timestamp: "2026-01-03T16:30:00.000Z", close: 75 },
+      { timestamp: "2026-01-05T16:30:00.000Z", close: 82 },
+    ]);
+
+    expect(history).toEqual([
+      { timestamp: "2026-01-05T16:30:00.000Z", investedValue: 702, marketValue: 820 },
+    ]);
+  });
+
   it("scales the chart around portfolio values instead of forcing zero into view", () => {
     const domain = calculateChartDomain([
       { timestamp: "2026-06-19T16:30:00.000Z", investedValue: 1_000, marketValue: 1_100 },
@@ -251,5 +265,32 @@ describe("calculatePeriodPerformance", () => {
     expect(performance?.value).toBeCloseTo(7.2);
     expect(performance?.percentage).toBeCloseTo(10);
     expect(performance?.referenceTimestamp).toBe("2026-07-06T16:30:00.000Z");
+  });
+});
+
+describe("calculateAnnualisedYield", () => {
+  it("derives a trailing annualised yield from published NAV history", () => {
+    const history = [
+      { timestamp: "2026-07-06T08:00:00.000Z", close: 100 },
+      { timestamp: "2026-07-13T08:00:00.000Z", close: 100.1 },
+    ];
+
+    const result = calculateAnnualisedYield(history, 7);
+
+    expect(result?.percentage).toBeCloseTo(((100.1 / 100) ** (365 / 7) - 1) * 100, 8);
+    expect(result?.days).toBe(7);
+  });
+
+  it("returns unavailable when there is not enough NAV history", () => {
+    expect(calculateAnnualisedYield([
+      { timestamp: "2026-07-13T08:00:00.000Z", close: 100.1 },
+    ], 7)).toBeNull();
+  });
+
+  it("does not label sparse old NAV history as a current trailing yield", () => {
+    expect(calculateAnnualisedYield([
+      { timestamp: "2026-06-01T08:00:00.000Z", close: 100 },
+      { timestamp: "2026-07-13T08:00:00.000Z", close: 100.2 },
+    ], 7)).toBeNull();
   });
 });

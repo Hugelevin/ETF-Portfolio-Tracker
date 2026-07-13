@@ -1,4 +1,4 @@
-# Personal EUR Portfolio Tracker
+# ETF Portfolio Tracker
 
 A private, local-first React dashboard for EUR-traded UCITS ETFs and one Moneybase cash fund. It builds as static files for GitHub Pages. Purchase lots, settings, manual prices and market cache live only in the browser.
 
@@ -10,7 +10,7 @@ The application prioritises honest data states over apparent completeness: missi
 - **Browser localStorage**: separate versioned records for portfolio, settings, manual prices and market cache.
 - **Cloudflare Worker**: a stateless, narrow CORS adapter. It accepts only validated market symbols and never receives shares, purchase prices, dates or fees.
 - **Yahoo Finance chart feed**: free, undocumented current-session ETF prices, historical ETF data and daily fund NAV data.
-- **Moneybase cash-fund model**: published NAV is preferred; a user-editable APY supplies context and a fallback estimate.
+- **Moneybase cash-fund model**: published NAV values the position; a trailing 7-day annualised NAV yield is recalculated automatically for context.
 - **Manual price or NAV**: final fallback, always visibly labelled.
 
 No analytics, cookies, accounts, external databases or portfolio server are used.
@@ -30,7 +30,7 @@ Positions are identified by ISIN, venue and trading currency—not ticker alone.
 | QUTM · IE0007Y8Y157 | ETF | Xetra | EUR | `QUTM.DE` |
 | VUAA · IE00BFMXXD54 | ETF | Xetra | EUR | `VUAA.DE` |
 
-UMMEPSA is shown as the accumulating Moneybase cash fund. The tracker values its units using the latest published daily NAV from the configured Yahoo identity. The current Moneybase APY is stored locally as context and as an estimate only when published NAV data is unavailable. For all instruments, EUR is the **trading currency** of the configured venue; it need not be the fund's base currency.
+UMMEPSA is shown as the accumulating Moneybase cash fund. The tracker values its units using the latest published daily NAV from the configured Yahoo identity. It also derives a trailing 7-day annualised yield from NAV history and updates it whenever market data refreshes. This derived figure is not Moneybase's advertised APY and is never used to value the holding. For all instruments, EUR is the **trading currency** of the configured venue; it need not be the fund's base currency.
 
 ## Do fees need to be tracked?
 
@@ -48,7 +48,7 @@ netReturn = currentValue − totalCost
 netReturnPercentage = netReturn ÷ totalCost × 100
 ```
 
-For UMMEPSA, published NAV is authoritative when available. If NAV is unavailable, each lot's cost excluding fees is compounded daily using the effective-dated APY and the result is visibly labelled as an estimate.
+For UMMEPSA, published NAV is authoritative. If NAV is unavailable, the value and return remain unavailable unless you enter a clearly labelled manual NAV. A yield percentage is never used to invent a fund balance.
 
 Missing prices are never replaced with zero. Non-EUR positions may be imported, but are excluded from combined EUR totals and reported in coverage.
 
@@ -118,13 +118,17 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 
 - Yahoo's chart endpoint is undocumented and unsupported. It may be delayed, rate-limited, changed or unavailable without notice. ETF responses must match the exact provider symbol, trading currency, exchange venue and instrument type. Fund NAV responses must match the exact provider symbol, trading currency and fund type; the provider venue is shown separately because Moneybase is the descriptive holding venue rather than Yahoo's NAV host venue. The parser uses the latest non-null timestamped chart point.
 - Public Yahoo responses are cached briefly at the Worker and the last successful response is cached locally in the browser.
-- UMMEPSA uses daily Yahoo fund NAV data. Its locally stored, effective-dated APY is used only as a fallback estimate when NAV is unavailable.
+- UMMEPSA uses daily Yahoo fund NAV data. Its displayed 7-day annualised NAV yield is calculated automatically from that history and is informational only.
 - Manual ETF prices and fund NAV values are visibly labelled, have an as-of date, and do not provide daily-change figures.
 - Each quote shows source, provider exchange, market timestamp, fetch timestamp and stale state.
 
-Fallback order is: Yahoo request → cached Yahoo → manual price/NAV → APY estimate for UMMEPSA only → unavailable.
+Fallback order is: Yahoo request → cached Yahoo → manual price/NAV → unavailable.
 
-Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
+Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default chart plots the raw market price or NAV. The optional **Value vs Cost** view starts at the first purchase, so it never plots a misleading zero before shares were owned. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
+
+## Logo Assets
+
+The application logo, favicon and simplified issuer wordmarks are bundled as SVG assets under `public/`. They do not make third-party image requests and fall back to text if an asset is unavailable. Issuer names and marks remain trademarks of their respective owners.
 
 ## Import, Export and Initial Holdings
 

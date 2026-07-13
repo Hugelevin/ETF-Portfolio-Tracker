@@ -1,6 +1,6 @@
 # ETF Portfolio Tracker
 
-A private, local-first React dashboard for EUR-traded UCITS ETFs and one Moneybase cash fund. It builds as static files for GitHub Pages. Purchase lots, settings, manual prices and market cache live only in the browser.
+A private, local-first React dashboard for EUR-traded UCITS ETFs and one Moneybase cash fund. It builds as static files for GitHub Pages. Orders, settings, manual prices and market cache live only in the browser.
 
 The application prioritises honest data states over apparent completeness: missing prices remain unavailable, stale data is labelled, and combined totals report their coverage.
 
@@ -156,7 +156,7 @@ For the real portfolio, use the generated, gitignored `outputs/private-portfolio
 }
 ```
 
-The private template contains the eight instrument identities and no purchase lots. The `outputs/` directory is ignored by Git.
+The private template contains the eight instrument identities and no orders. The `outputs/` directory is ignored by Git.
 
 ## Verify provider symbols
 
@@ -176,12 +176,12 @@ Because Yahoo is an undocumented source, a temporary provider failure should be 
 
 ## Deploy the dashboard to GitHub Pages
 
-1. Create an empty GitHub repository and push this repository to its `main` branch. Confirm that no API key, `.env` file, `outputs/` file or real purchase lot is staged.
+1. Create an empty GitHub repository and push this repository to its `main` branch. Confirm that no API key, `.env` file, `outputs/` file or real order is staged.
 2. In GitHub, open **Settings → Pages** and set **Source** to **GitHub Actions**.
 3. Push `main`, then open **Actions → Deploy portfolio to GitHub Pages**. The workflow runs linting, type checking and tests before building.
 4. The workflow sets Vite's base path to `/<repository-name>/`, so assets work on a project Pages URL.
 5. Deploy the Worker first, enter its URL in dashboard Settings, and press **Refresh prices**.
-6. Import the private JSON template, or add purchase lots in the dashboard.
+6. Import the private JSON template, or add orders in the dashboard.
 
 For a custom domain hosted at its root, set `VITE_BASE_PATH=/` in an adjusted workflow.
 

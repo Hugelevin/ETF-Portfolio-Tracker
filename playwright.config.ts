@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const localExecutablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH;
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -8,11 +9,11 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: `http://127.0.0.1:${port}`,
     trace: "on-first-retry",
     ...(localExecutablePath ? { launchOptions: { executablePath: localExecutablePath } } : {}),
   },
-  webServer: { command: "node node_modules/vite/bin/vite.js preview --configLoader runner --host 127.0.0.1 --port 4173", port: 4173, reuseExistingServer: !process.env.CI },
+  webServer: { command: `node node_modules/vite/bin/vite.js preview --configLoader runner --host 127.0.0.1 --port ${port}`, port, reuseExistingServer: !process.env.CI },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { ...devices["Pixel 7"] } },

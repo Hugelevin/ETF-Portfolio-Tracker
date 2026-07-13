@@ -34,7 +34,7 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={keyboard.dialogRef} onKeyDown={keyboard.onKeyDown} className="modal purchase-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-title">
-      <header><div><p className="eyebrow">Record a Transaction</p><h2 id="purchase-title">Add a Purchase Lot</h2></div><button className="icon-button" aria-label="Close purchase form" onClick={onClose}><X /></button></header>
+      <header><div><p className="eyebrow">Record a Transaction</p><h2 id="purchase-title">Add an Order</h2></div><button className="icon-button" aria-label="Close purchase form" onClick={onClose}><X /></button></header>
       <form onSubmit={submit}>
         <label htmlFor="instrument-search">Find an Instrument</label>
         <div className="input-with-icon"><Search aria-hidden="true" /><input id="instrument-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by ticker, name or ISIN" autoFocus /></div>

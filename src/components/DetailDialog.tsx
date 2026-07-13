@@ -13,7 +13,7 @@ const ranges: ChartRange[] = ["1D", "1W", "1M", "3M", "1Y", "MAX"];
 
 interface Props {
   position: PositionMetrics;
-  record: MarketRecord | null;
+  getRecord: (range: ChartRange) => MarketRecord | null;
   loading: boolean;
   error?: string;
   onClose: () => void;
@@ -23,15 +23,23 @@ interface Props {
   onManualPrice: (price: ManualPrice) => void;
 }
 
-export function DetailDialog({ position, record, loading, error, onClose, onRange, onLotSave, onLotDelete, onManualPrice }: Props) {
+export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete, onManualPrice }: Props) {
   const [range, setRange] = useState<ChartRange>("1M");
   const [chartMode, setChartMode] = useState<ChartMode>("price");
   const [editing, setEditing] = useState<PurchaseLot | null>(null);
   const keyboard = useDialogKeyboard(onClose, "[aria-label='Close details']");
+  const record = getRecord(range);
   const history = useMemo(() => record?.history ?? [], [record]);
-  const weekly = calculatePeriodPerformance(history, "1W");
-  const monthly = calculatePeriodPerformance(history, "1M");
-  const annualisedYield = calculateAnnualisedYield(history, 7);
+  // Prefer daily history long enough for calendar-month performance. This is
+  // independent of the selected chart range so headline metrics stay stable.
+  const metricsHistory = getRecord("3M")?.history
+    ?? getRecord("1Y")?.history
+    ?? getRecord("MAX")?.history
+    ?? getRecord("1M")?.history
+    ?? history;
+  const weekly = calculatePeriodPerformance(metricsHistory, "1W");
+  const monthly = calculatePeriodPerformance(metricsHistory, "1M");
+  const annualisedYield = calculateAnnualisedYield(metricsHistory, 7);
   const visibleHistory = useMemo(() => filterHistoryForRange(history, range), [history, range]);
   const instrument = position.instrument;
 
@@ -93,18 +101,18 @@ export function DetailDialog({ position, record, loading, error, onClose, onRang
         </section>
 
         <section className="lots-panel" aria-labelledby="lots-title">
-          <div className="section-heading"><div><p className="eyebrow">Cost Basis</p><h3 id="lots-title">Purchase Lots</h3></div><strong>{formatNumber(position.totalShares)} Total</strong></div>
-          <div className="compact-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{lot.purchaseDate}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit lot from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete lot from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
+          <div className="section-heading"><div><p className="eyebrow">Cost Basis</p><h3 id="lots-title">Orders</h3></div><strong>{formatNumber(position.totalShares)} Total</strong></div>
+          <div className="compact-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{lot.purchaseDate}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit order from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete order from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
         </section>
 
-        <section className="manual-panel">
-          <div><h3>Manual {instrument.assetType === "FUND" ? "NAV" : "Price"}</h3><p>Use this only when provider data is unavailable. Manual values are clearly labelled in the dashboard.</p></div>
+        <details className="manual-panel">
+          <summary><span><strong>Manual {instrument.assetType === "FUND" ? "NAV" : "Price"} Fallback</strong><small>Only needed when Yahoo and the saved market update are unavailable.</small></span></summary>
           <form onSubmit={setManual}>
             <label>{instrument.assetType === "FUND" ? "NAV" : "Price"}<input name="manualPrice" type="number" min="0.000001" step="any" required /></label>
             <label>As-of Date<input name="manualDate" type="date" required /></label>
             <button className="button secondary" type="submit">Save Manual Value</button>
           </form>
-        </section>
+        </details>
       </div>
 
       {editing && <LotEditor lot={editing} onClose={() => setEditing(null)} onSave={(lot) => { onLotSave(lot); setEditing(null); }} />}
@@ -130,7 +138,7 @@ function LotEditor({ lot, onClose, onSave }: { lot: PurchaseLot; onClose: () => 
 
   return <div className="nested-editor" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <form ref={keyboard.dialogRef as React.RefObject<HTMLFormElement | null>} role="dialog" aria-modal="true" aria-labelledby="edit-lot-title" onSubmit={submit} onKeyDown={(event) => { keyboard.onKeyDown(event); event.stopPropagation(); }}>
-      <div className="section-heading"><h3 id="edit-lot-title">Edit Purchase Lot</h3><button type="button" className="icon-button" aria-label="Close lot editor" onClick={onClose}><X /></button></div>
+      <div className="section-heading"><h3 id="edit-lot-title">Edit Order</h3><button type="button" className="icon-button" aria-label="Close order editor" onClick={onClose}><X /></button></div>
       <div className="form-grid"><label>Shares<input name="shares" type="number" step="any" min="0.000001" defaultValue={lot.shares} required /></label><label>Purchase Price<input name="price" type="number" step="any" min="0.000001" defaultValue={lot.pricePerShare} required /></label><label>Purchase Date<input name="date" type="date" defaultValue={lot.purchaseDate} required /></label><label>Broker Fees<span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" step="0.01" min="0" defaultValue={lot.fees} required /></span></label></div>
       <footer><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" type="submit">Save Changes</button></footer>
     </form>

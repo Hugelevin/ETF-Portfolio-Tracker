@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, Trash2, Upload } from "lucide-react";
+import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { DetailDialog } from "./components/DetailDialog";
 import { HoldingsTable } from "./components/HoldingsTable";
 import { ImportPreviewDialog } from "./components/ImportPreviewDialog";
@@ -10,16 +10,25 @@ import { SAMPLE_PORTFOLIO } from "./config/samplePortfolio";
 import { createPortfolioStorage, exportPortfolioJson, importPortfolioJson } from "./data/storage";
 import { calculatePortfolioSummary, calculatePosition } from "./domain/portfolio";
 import { fetchYahooRecord } from "./market/client";
-import { mergeHistory } from "./market/history";
 import { isValidMarketRecord, resolveMarketData } from "./market/service";
 import type { AppSettings, ChartRange, Instrument, ManualPrice, MarketRecord, PortfolioDocument, PositionMetrics, PurchaseLot } from "./types";
 
 const browserStorage = createPortfolioStorage(window.localStorage);
 const cacheKey = (instrumentId: string, range: ChartRange) => `${instrumentId}:${range}`;
 
-function asStaleCache(value: MarketRecord, instrument: Instrument | undefined): MarketRecord | null {
-  if (!instrument || !isValidMarketRecord(value, instrument)) return null;
+function asStaleCache(value: MarketRecord | undefined, instrument: Instrument | undefined): MarketRecord | null {
+  if (!value || !instrument || !isValidMarketRecord(value, instrument)) return null;
   return { ...value, quote: { ...value.quote, source: "cache", stale: true, label: "Cached price - last successful update" } };
+}
+
+function freshestRecord(existing: MarketRecord | undefined, incoming: MarketRecord): MarketRecord {
+  if (!existing) return incoming;
+  const asOfDifference = Date.parse(incoming.quote.asOf) - Date.parse(existing.quote.asOf);
+  if (asOfDifference !== 0) return asOfDifference > 0 ? incoming : existing;
+  const priority = { yahoo: 3, cache: 2, manual: 1 } as const;
+  const sourceDifference = priority[incoming.quote.source] - priority[existing.quote.source];
+  if (sourceDifference !== 0) return sourceDifference > 0 ? incoming : existing;
+  return Date.parse(incoming.quote.fetchedAt) > Date.parse(existing.quote.fetchedAt) ? incoming : existing;
 }
 
 export default function App() {
@@ -29,10 +38,21 @@ export default function App() {
   const [cache, setCache] = useState(() => browserStorage.loadMarketCache());
   const [records, setRecords] = useState<Record<string, MarketRecord>>(() => {
     const loaded = browserStorage.loadMarketCache();
+    return Object.fromEntries(portfolio.instruments.flatMap((instrument) => {
+      const record = Object.entries(loaded)
+        .filter(([key]) => key.startsWith(`${instrument.id}:`))
+        .map(([, value]) => asStaleCache(value, instrument))
+        .filter((value): value is MarketRecord => value !== null)
+        .reduce<MarketRecord | undefined>((latest, candidate) => freshestRecord(latest, candidate), undefined);
+      return record ? [[instrument.id, record]] : [];
+    }));
+  });
+  const [chartRecords, setChartRecords] = useState<Record<string, MarketRecord>>(() => {
+    const loaded = browserStorage.loadMarketCache();
     return Object.fromEntries(Object.entries(loaded).flatMap(([key, value]) => {
       const instrumentId = key.split(":")[0] ?? key;
       const record = asStaleCache(value, portfolio.instruments.find((instrument) => instrument.id === instrumentId));
-      return record ? [[instrumentId, record]] : [];
+      return record ? [[key, record]] : [];
     }));
   });
   const [loading, setLoading] = useState(new Set<string>());
@@ -43,6 +63,8 @@ export default function App() {
   const [importPreview, setImportPreview] = useState<PortfolioDocument | null>(null);
   const [notice, setNotice] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+  const latestRequest = useRef<Record<string, number>>({});
+  const latestRangeRequest = useRef<Record<string, number>>({});
 
   const positions = useMemo(() => portfolio.instruments.flatMap((instrument): PositionMetrics[] => {
     const lots = portfolio.lots.filter((lot) => lot.instrumentId === instrument.id);
@@ -55,34 +77,43 @@ export default function App() {
   function persist(next: PortfolioDocument) { setPortfolio(browserStorage.savePortfolio(next)); }
 
   async function refreshOne(instrument: Instrument, range: ChartRange = "1M") {
+    const requestId = (latestRequest.current[instrument.id] ?? 0) + 1;
+    latestRequest.current[instrument.id] = requestId;
+    const selectedCacheKey = cacheKey(instrument.id, range);
+    const rangeRequestId = (latestRangeRequest.current[selectedCacheKey] ?? 0) + 1;
+    latestRangeRequest.current[selectedCacheKey] = rangeRequestId;
     setLoading((current) => new Set(current).add(instrument.id));
     setErrors((current) => ({ ...current, [instrument.id]: "" }));
     const resolution = await resolveMarketData({
       instrument,
       yahoo: () => fetchYahooRecord(instrument, range, settings.proxyUrl),
-      cached: cache[cacheKey(instrument.id, range)] ?? cache[cacheKey(instrument.id, "1M")],
+      // A shorter cache must never masquerade as the selected chart range.
+      cached: cache[selectedCacheKey],
       manual: manualPrices[instrument.id],
     });
-    if (resolution.record) {
+    const isLatestForRange = latestRangeRequest.current[selectedCacheKey] === rangeRequestId;
+    if (resolution.record && isLatestForRange) {
       setRecords((current) => ({
         ...current,
-        [instrument.id]: {
-          ...resolution.record!,
-          history: mergeHistory(current[instrument.id]?.history ?? [], resolution.record!.history),
-        },
+        [instrument.id]: freshestRecord(current[instrument.id], resolution.record!),
       }));
+      setChartRecords((current) => ({ ...current, [selectedCacheKey]: resolution.record! }));
       if (resolution.record.quote.source === "yahoo") {
         setCache((current) => {
-          const next = { ...current, [cacheKey(instrument.id, range)]: resolution.record! };
+          const next = { ...current, [selectedCacheKey]: resolution.record! };
           browserStorage.saveMarketCache(next);
           return next;
         });
       }
-    } else {
-      setRecords((current) => { const next = { ...current }; delete next[instrument.id]; return next; });
+    } else if (!resolution.record && isLatestForRange) {
+      // Keep the latest quote in the portfolio, but clear only the unavailable
+      // selected range so the chart can show an honest empty/error state.
+      setChartRecords((current) => { const next = { ...current }; delete next[selectedCacheKey]; return next; });
     }
-    if (resolution.errors.length) setErrors((current) => ({ ...current, [instrument.id]: resolution.errors.join(" · ") }));
-    setLoading((current) => { const next = new Set(current); next.delete(instrument.id); return next; });
+    if (latestRequest.current[instrument.id] === requestId) {
+      if (resolution.errors.length) setErrors((current) => ({ ...current, [instrument.id]: resolution.errors.join(" · ") }));
+      setLoading((current) => { const next = new Set(current); next.delete(instrument.id); return next; });
+    }
   }
 
   async function refreshAll() {
@@ -111,14 +142,14 @@ export default function App() {
 
   function saveLot(lot: PurchaseLot) { persist({ ...portfolio, lots: portfolio.lots.map((item) => item.id === lot.id ? lot : item) }); }
   function deleteLot(lot: PurchaseLot) {
-    if (!window.confirm(`Delete the purchase lot dated ${lot.purchaseDate}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete the order dated ${lot.purchaseDate}? This cannot be undone.`)) return;
     const lots = portfolio.lots.filter((item) => item.id !== lot.id);
     const wasFinalLot = !lots.some((item) => item.instrumentId === lot.instrumentId);
     persist({ ...portfolio, instruments: wasFinalLot ? portfolio.instruments.filter((item) => item.id !== lot.instrumentId) : portfolio.instruments, lots });
     if (wasFinalLot) setSelectedId(null);
   }
   function deleteHolding(position: PositionMetrics) {
-    if (!window.confirm(`Delete ${position.instrument.ticker} and all ${position.lots.length} purchase lots? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${position.instrument.ticker} and all ${position.lots.length} orders? This cannot be undone.`)) return;
     persist({ ...portfolio, instruments: portfolio.instruments.filter((item) => item.id !== position.instrument.id), lots: portfolio.lots.filter((item) => item.instrumentId !== position.instrument.id) });
     setSelectedId(null);
   }
@@ -139,10 +170,10 @@ export default function App() {
     catch (error) { setNotice(`Import rejected: ${error instanceof Error ? error.message : "invalid JSON"}`); }
     if (importRef.current) importRef.current.value = "";
   }
-  function applyImport() { if (!importPreview) return; persist(importPreview); setImportPreview(null); setRecords({}); setNotice("Portfolio imported. Existing portfolio data was replaced."); }
+  function applyImport() { if (!importPreview) return; persist(importPreview); setImportPreview(null); setRecords({}); setChartRecords({}); setNotice("Portfolio imported. Existing portfolio data was replaced."); }
   function clearPortfolio() {
     if (!window.confirm("Clear the entire portfolio, manual prices and cached market data? This cannot be undone.")) return;
-    browserStorage.clearPortfolio(); const empty: PortfolioDocument = { schemaVersion: 1, baseCurrency: "EUR", instruments: [], lots: [] }; setPortfolio(empty); setRecords({}); setCache({}); setManualPrices({}); setSelectedId(null);
+    browserStorage.clearPortfolio(); const empty: PortfolioDocument = { schemaVersion: 1, baseCurrency: "EUR", instruments: [], lots: [] }; setPortfolio(empty); setRecords({}); setChartRecords({}); setCache({}); setManualPrices({}); setSelectedId(null);
   }
   function saveSettings(next: AppSettings) { browserStorage.saveSettings(next); setSettings(next); setSettingsOpen(false); setNotice("Market-data settings saved."); }
 
@@ -152,15 +183,15 @@ export default function App() {
     {!navigator.onLine && <div className="global-banner" role="status">You are offline. Cached or manual prices may still be available.</div>}
     {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}>×</button></div>}
     <main id="main">
-      <div className="page-heading"><div><p className="eyebrow">EUR Investment Overview</p><h1>Portfolio Dashboard</h1></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
+      <div className="page-heading"><div><p className="eyebrow">Private - Local to This Browser</p><h1>Portfolio Dashboard</h1></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
       <SummaryCards summary={summary} positions={positions} />
       {!positions.length ? <section className="empty-state"><div className="empty-icon"><ChartNoAxesCombined /></div><p className="eyebrow">Get Started</p><h2>Build Your Portfolio</h2><p>Add a purchase or import your portfolio JSON file to begin tracking your investments.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
-      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local Data</p><h2 id="data-title">Import, Export and Recovery</h2><p>Exports contain instruments and purchase lots only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear Portfolio</button></div></section>
+      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local Data</p><h2 id="data-title">Import, Export and Recovery</h2><p>Exports contain instruments and orders only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear Portfolio</button></div></section>
     </main>
-    <footer className="site-footer"><p>Market data provided by Yahoo Finance.</p></footer>
+    <footer className="site-footer"><p><ShieldCheck aria-hidden="true" /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} onSave={addLot} />}
     {settingsOpen && <SettingsDialog value={settings} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />}
-    {selected && <DetailDialog position={selected} record={records[selected.instrument.id] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} />}
+    {selected && <DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} />}
     {importPreview && <ImportPreviewDialog portfolio={importPreview} onCancel={() => setImportPreview(null)} onApply={applyImport} />}
   </div>;
 }

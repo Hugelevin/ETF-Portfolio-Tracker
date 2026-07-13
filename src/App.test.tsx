@@ -11,6 +11,8 @@ describe("portfolio dashboard", () => {
 
   it("shows an honest empty state and zero price coverage", () => {
     render(<App />);
+    expect(screen.getByText("Private - Local to This Browser")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio data remains on this device.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Build Your Portfolio" })).toBeInTheDocument();
     expect(screen.getByText("0 of 0 EUR positions valued")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: ".metric-card.primary strong" })).toBeInTheDocument();
@@ -20,7 +22,7 @@ describe("portfolio dashboard", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Add First Purchase" }));
-    const dialog = screen.getByRole("dialog", { name: "Add a Purchase Lot" });
+    const dialog = screen.getByRole("dialog", { name: "Add an Order" });
     await user.type(within(dialog).getByLabelText("Shares"), "25");
     await user.type(within(dialog).getByLabelText("Purchase Price per Share"), "76.8");
     fireEvent.change(within(dialog).getByLabelText("Purchase Date"), { target: { value: "2026-01-02" } });
@@ -65,6 +67,25 @@ describe("portfolio dashboard", () => {
     expect(screen.getByText("Previous Update")).toBeInTheDocument();
   });
 
+  it("hydrates valuation from another range without mislabelling its history as one month", async () => {
+    const user = userEvent.setup();
+    const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1Y": { quote: { instrumentId: instrument.id, price: 82, previousClose: 81, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-01T10:00:00Z", close: 70 }, { timestamp: "2026-07-13T10:00:00Z", close: 82 }] } }));
+
+    render(<App />);
+
+    expect(screen.getAllByText("€82.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("1 of 1 EUR positions valued")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
+    const detail = screen.getByRole("dialog", { name: /JEDI/ });
+    expect(screen.getByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
+    const metricCount = within(detail).getAllByText("+17.14%").length;
+    expect(metricCount).toBeGreaterThan(0);
+    await user.click(within(detail).getByRole("button", { name: "1D" }));
+    expect(within(detail).getAllByText("+17.14%")).toHaveLength(metricCount);
+  });
+
   it("shows raw market prices as the default historical chart", async () => {
     const user = userEvent.setup();
     const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
@@ -78,7 +99,21 @@ describe("portfolio dashboard", () => {
     await user.click(screen.getByText("View Chart Data as a Table"));
     const table = screen.getByRole("table", { name: "Historical market prices" });
     expect(within(table).getByText("€78.00")).toBeInTheDocument();
+    expect(within(table).getByText("07 Jul 2026")).toBeInTheDocument();
     expect(within(table).queryByText("€1,950.00")).not.toBeInTheDocument();
+  });
+
+  it("does not present a one-month cache as one-year history", async () => {
+    const user = userEvent.setup();
+    const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 25, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-13T10:00:00Z", close: 78 }, { timestamp: "2026-07-13T10:00:00Z", close: 80 }] } }));
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
+    await user.click(screen.getByRole("button", { name: "1Y" }));
+
+    expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
   });
 
   it("automatically dismisses update notifications after 15 seconds", () => {
@@ -161,6 +196,8 @@ describe("portfolio dashboard", () => {
     expect(within(dialog).getByText("7-Day Annualised NAV Yield")).toBeInTheDocument();
     expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
     expect(within(dialog).queryByLabelText("APY (%)")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "1D" }));
+    expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
   });
 
   it("does not present a missing fund APY as a real zero rate", () => {

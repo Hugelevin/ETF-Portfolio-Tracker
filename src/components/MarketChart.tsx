@@ -24,7 +24,7 @@ interface ChartDatum {
 function chartLabel(timestamp: string, intraday: boolean) {
   return new Date(timestamp).toLocaleString("en-GB", intraday
     ? { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }
-    : { day: "2-digit", month: "short", year: "2-digit" });
+    : { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function priceDomain(points: Array<{ price: number }>): [number, number] {
@@ -77,9 +77,9 @@ export function MarketChart({ history, lots, mode, currency }: Props) {
             ? new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)
             : new Intl.NumberFormat("en-GB", { notation: "compact" }).format(value)} tickLine={false} axisLine={false} width={58} />
           <Tooltip formatter={(value) => formatMoney(typeof value === "number" ? value : Number(value), currency)} labelStyle={{ color: "#162824" }} />
-          {mode === "price" ? <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" /> : <>
-            <Area type="monotone" dataKey="marketValue" name="Market Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" />
-            <Line type="stepAfter" dataKey="investedValue" name="Invested Amount" stroke="#d18b3f" strokeWidth={2} dot={false} />
+          {mode === "price" ? <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={data.length <= 2 ? { r: 3 } : false} /> : <>
+            <Area type="monotone" dataKey="marketValue" name="Market Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={data.length <= 2 ? { r: 3 } : false} />
+            <Line type="stepAfter" dataKey="investedValue" name="Invested Amount" stroke="#d18b3f" strokeWidth={2} dot={data.length <= 2 ? { r: 3 } : false} />
           </>}
         </ComposedChart>
       </ResponsiveContainer>

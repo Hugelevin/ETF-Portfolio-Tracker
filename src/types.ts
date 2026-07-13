@@ -82,6 +82,7 @@ export interface PortfolioDocument {
 
 export interface PortfolioSummary {
   totalInvested: number;
+  totalFees: number;
   currentValue: number;
   marketReturn: number;
   marketReturnPercentage: number | null;

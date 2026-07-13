@@ -184,7 +184,7 @@ export function buildPositionValueHistory(
     const ownedLots = lots.filter((lot) => lot.purchaseDate <= pointDate);
     const shares = ownedLots.reduce((sum, lot) => sum + lot.shares, 0);
     const investedValue = ownedLots.reduce(
-      (sum, lot) => sum + lot.shares * lot.pricePerShare + lot.fees,
+      (sum, lot) => sum + lot.shares * lot.pricePerShare,
       0,
     );
 
@@ -208,7 +208,11 @@ export function calculatePortfolioSummary(
     (position) => position.currentValue !== null,
   );
   const totalInvested = baseCurrencyPositions.reduce(
-    (sum, position) => sum + position.totalCost,
+    (sum, position) => sum + position.purchaseCostExcludingFees,
+    0,
+  );
+  const totalFees = baseCurrencyPositions.reduce(
+    (sum, position) => sum + position.totalFees,
     0,
   );
   const currentValue = pricedPositions.reduce(
@@ -241,6 +245,7 @@ export function calculatePortfolioSummary(
 
   return {
     totalInvested,
+    totalFees,
     currentValue,
     marketReturn,
     marketReturnPercentage:

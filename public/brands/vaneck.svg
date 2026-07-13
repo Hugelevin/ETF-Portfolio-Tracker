@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 48" role="img" aria-label="VanEck">
-  <path d="M5 12h30l-8 7H13z" fill="#1d6657"/>
-  <text x="5" y="37" fill="#143e36" font-family="Arial, sans-serif" font-size="25" font-weight="700">VanEck</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="VanEck">
+  <circle cx="24" cy="24" r="21" fill="#e4f1ed"/>
+  <path d="M11 13h26l-7 7H18z" fill="#2a7567"/>
+  <path d="m14 22 10 15 10-15h-7l-3 6-3-6z" fill="#143e36"/>
 </svg>

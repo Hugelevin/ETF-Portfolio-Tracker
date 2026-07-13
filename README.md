@@ -17,7 +17,7 @@ No analytics, cookies, accounts, external databases or portfolio server are used
 
 ## Supported instrument identities
 
-Positions are identified by ISIN, venue and trading currency—not ticker alone.
+Positions are identified by ISIN, venue and trading currency - not ticker alone.
 
 | Holding | Type | Venue | Trading currency | Yahoo symbol |
 |---|---|---|---|---|
@@ -34,12 +34,14 @@ UMMEPSA is shown as the accumulating Moneybase cash fund. The tracker values its
 
 ## Do fees need to be tracked?
 
-No. Broker fees default to €0. When entered, each fee is treated as a one-off amount paid on top of that purchase. It increases total cost but does not reduce the number of shares. The dashboard shows both **Market Return** before broker fees, which is comparable with Moneybase's main profit/loss figure, and **Net Return** after broker fees.
+No. Broker fees default to €0. When entered, each fee is treated as a one-off wallet expense paid on top of that purchase. It does not reduce the number of shares and is excluded from **Invested** and **Market Return**, matching Moneybase's presentation. The dashboard tracks accumulated broker fees separately, while the detail view retains **Net Return** after fees.
 
 Calculations are:
 
 ```text
 totalCost = Σ(shares × purchasePrice + fees)
+totalInvested = Σ(shares × purchasePrice)
+totalFees = Σ(fees)
 averagePurchasePrice = Σ(shares × purchasePrice) ÷ totalShares
 currentValue = totalShares × latestPrice
 marketReturn = currentValue − Σ(shares × purchasePrice)
@@ -124,7 +126,7 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 
 Fallback order is: Yahoo request → cached Yahoo → manual price/NAV → unavailable.
 
-Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default chart plots the raw market price or NAV. The optional **Value vs Cost** view starts at the first purchase, so it never plots a misleading zero before shares were owned. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
+Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default chart plots the raw market price or NAV. The optional **Value vs Invested** view excludes broker fees and starts at the first purchase, so it never plots a misleading zero before shares were owned. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
 
 ## Logo Assets
 

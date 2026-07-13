@@ -42,10 +42,25 @@ test("purchase form is keyboard reachable", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Add a Purchase Lot" })).toBeHidden();
 });
 
+test("keeps data actions equal and instrument marks contained", async ({ page }) => {
+  await page.goto("/");
+  const actions = await page.locator(".data-tools .tool-actions .button").all();
+  expect(actions).toHaveLength(3);
+  const widths = await Promise.all(actions.map(async (action) => (await action.boundingBox())?.width ?? 0));
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2);
+
+  const tile = await page.locator(".instrument-logo").first().boundingBox();
+  const mark = await page.locator(".instrument-logo img").first().boundingBox();
+  expect(tile).not.toBeNull();
+  expect(mark).not.toBeNull();
+  expect(mark!.width).toBeLessThanOrEqual(tile!.width);
+  expect(mark!.height).toBeLessThanOrEqual(tile!.height);
+});
+
 test("shows an explicit rate-limit error without inventing a price", async ({ page }) => {
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, json: { error: "daily request allowance reached" } }));
   await page.goto("/");
-  await expect(page.getByText(/Market Data Unavailable — Rate limit reached/)).toBeVisible();
+  await expect(page.getByText(/Market Data Unavailable - Rate limit reached/)).toBeVisible();
   await expect(page.getByText("0 of 1 EUR positions valued")).toBeVisible();
 });

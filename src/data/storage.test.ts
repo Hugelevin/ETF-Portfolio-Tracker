@@ -75,7 +75,7 @@ describe("portfolio storage", () => {
       baseCurrency: "EUR",
       instruments: [{
         id: "ummepsa-nav-eur",
-        name: "UBS cash fund",
+        name: "UBS (Irl) Select Money Market Fund — EUR P Acc",
         ticker: "UMMEPSA",
         isin: "IE00BWWCR731",
         exchange: "Daily fund NAV",
@@ -87,6 +87,7 @@ describe("portfolio storage", () => {
     };
 
     const migrated = storage.savePortfolio(legacy).instruments[0];
+    expect(migrated?.name).toBe("UBS (Irl) Select Money Market Fund - EUR P Acc");
     expect(migrated?.exchange).toBe("Moneybase Cash Fund");
     expect(migrated?.annualYieldPercentage).toBeUndefined();
     expect(migrated?.yahooSymbol).toBe("0P0001CD0Q.F");

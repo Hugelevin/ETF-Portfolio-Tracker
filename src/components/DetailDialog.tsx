@@ -67,7 +67,7 @@ export function DetailDialog({ position, record, loading, error, onClose, onRang
           <div><p>Current NAV</p><strong>{formatMoney(position.quote?.price ?? null, instrument.currency)}</strong>{position.quote?.previousClose != null && <small className={position.quote.price < position.quote.previousClose ? "negative-text" : "positive-text"}>Today {position.quote.price >= position.quote.previousClose ? "▲" : "▼"} {formatMoney(position.quote.price - position.quote.previousClose, instrument.currency)} · {formatPercent(((position.quote.price - position.quote.previousClose) / position.quote.previousClose) * 100)}</small>}<StatusBadge quote={position.quote} loading={loading} error={error} /></div>
           <div><p>{annualisedYield ? `${formatNumber(annualisedYield.days)}-Day Annualised NAV Yield` : "7-Day Annualised NAV Yield"}</p><strong>{annualisedYield ? formatPercent(annualisedYield.percentage) : "Unavailable"}</strong><small>{annualisedYield ? "Calculated automatically from published NAV" : "Needs recent NAV data spanning at least 7 days"}</small></div>
           <div><p>Market Return</p><strong className={position.marketReturn !== null && position.marketReturn < 0 ? "negative-text" : "positive-text"}>{formatMoney(position.marketReturn, instrument.currency)}</strong><small>{formatPercent(position.marketReturnPercentage)}</small></div>
-          <div><p>Net Return</p><strong className={position.profitLoss !== null && position.profitLoss < 0 ? "negative-text" : "positive-text"}>{formatMoney(position.profitLoss, instrument.currency)}</strong></div>
+          <div><p>Net Return</p><strong className={position.profitLoss !== null && position.profitLoss < 0 ? "negative-text" : "positive-text"}>{formatMoney(position.profitLoss, instrument.currency)}</strong><small>After {formatMoney(position.totalFees, instrument.currency)} Broker Fees</small></div>
         </div> : <div className="quote-strip">
           <div><p>Current Price</p><strong>{formatMoney(position.quote?.price ?? null, instrument.currency)}</strong>{position.dailyChange !== null && <small className={position.dailyChange < 0 ? "negative-text" : "positive-text"}>Today {position.dailyChange >= 0 ? "▲" : "▼"} {formatMoney(position.dailyChange, instrument.currency)} · {formatPercent(position.dailyChangePercentage)}</small>}<StatusBadge quote={position.quote} loading={loading} error={error} /></div>
           <div><p>Weekly Performance</p><strong className={weekly && weekly.value < 0 ? "negative-text" : "positive-text"}>{weekly ? formatPercent(weekly.percentage) : "Unavailable"}</strong></div>
@@ -81,10 +81,10 @@ export function DetailDialog({ position, record, loading, error, onClose, onRang
 
         <section className="chart-panel" aria-labelledby="chart-title">
           <div className="chart-toolbar">
-            <div><p className="eyebrow">Performance</p><h3 id="chart-title">{chartMode === "price" ? (instrument.assetType === "FUND" ? "NAV History" : "Market Price History") : "Position Value vs Invested Cost"}</h3></div>
+            <div><p className="eyebrow">Performance</p><h3 id="chart-title">{chartMode === "price" ? (instrument.assetType === "FUND" ? "NAV History" : "Market Price History") : "Position Value vs Invested Amount"}</h3></div>
             <div className="view-controls" role="group" aria-label="Chart view">
               <button type="button" className={chartMode === "price" ? "active" : ""} aria-pressed={chartMode === "price"} onClick={() => setChartMode("price")}>{instrument.assetType === "FUND" ? "NAV" : "Market Price"}</button>
-              <button type="button" className={chartMode === "value" ? "active" : ""} aria-pressed={chartMode === "value"} onClick={() => setChartMode("value")}>Value vs Cost</button>
+              <button type="button" className={chartMode === "value" ? "active" : ""} aria-pressed={chartMode === "value"} onClick={() => setChartMode("value")}>Value vs Invested</button>
             </div>
           </div>
           <div className="range-controls" aria-label="Chart time range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={() => changeRange(item)}>{item}</button>)}</div>

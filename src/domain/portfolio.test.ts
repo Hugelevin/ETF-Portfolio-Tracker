@@ -75,7 +75,7 @@ describe("calculatePosition", () => {
   it("does not invent a money-market balance from a stored yield percentage", () => {
     const fund: Instrument = {
       id: "ummepsa-nav-eur",
-      name: "UBS (Irl) Select Money Market Fund — EUR P Acc",
+      name: "UBS (Irl) Select Money Market Fund - EUR P Acc",
       ticker: "UMMEPSA",
       isin: "IE00BWWCR731",
       exchange: "Moneybase cash fund",
@@ -100,7 +100,7 @@ describe("calculatePosition", () => {
   it("uses the published fund NAV before the APY estimate", () => {
     const fund: Instrument = {
       id: "ummepsa-nav-eur",
-      name: "UBS (Irl) Select Money Market Fund — EUR P Acc",
+      name: "UBS (Irl) Select Money Market Fund - EUR P Acc",
       ticker: "UMMEPSA",
       isin: "IE00BWWCR731",
       exchange: "Moneybase Cash Fund",
@@ -187,7 +187,8 @@ describe("calculatePortfolioSummary", () => {
 
     const summary = calculatePortfolioSummary([eurPriced, eurUnpriced, usdPosition], "EUR");
 
-    expect(summary.totalInvested).toBe(2_021);
+    expect(summary.totalInvested).toBe(2_020);
+    expect(summary.totalFees).toBe(1);
     expect(summary.currentValue).toBe(2_000);
     expect(summary.marketReturn).toBe(80);
     expect(summary.profitLoss).toBe(80);
@@ -222,8 +223,8 @@ describe("buildPositionValueHistory", () => {
     ]);
 
     expect(history).toEqual([
-      { timestamp: "2026-01-03T16:30:00.000Z", investedValue: 702, marketValue: 750 },
-      { timestamp: "2026-01-05T16:30:00.000Z", investedValue: 1_103, marketValue: 1_230 },
+      { timestamp: "2026-01-03T16:30:00.000Z", investedValue: 700, marketValue: 750 },
+      { timestamp: "2026-01-05T16:30:00.000Z", investedValue: 1_100, marketValue: 1_230 },
     ]);
   });
 
@@ -238,7 +239,7 @@ describe("buildPositionValueHistory", () => {
     ]);
 
     expect(history).toEqual([
-      { timestamp: "2026-01-05T16:30:00.000Z", investedValue: 702, marketValue: 820 },
+      { timestamp: "2026-01-05T16:30:00.000Z", investedValue: 700, marketValue: 820 },
     ]);
   });
 

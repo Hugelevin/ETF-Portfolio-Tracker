@@ -2,7 +2,7 @@ import type { MarketQuote } from "../types";
 
 export function StatusBadge({ quote, loading, error }: { quote: MarketQuote | null; loading?: boolean; error?: string }) {
   if (loading) return <span className="status loading">Loading Market Data…</span>;
-  if (!quote) return <span className="status unavailable">Market Data Unavailable{error ? ` — ${error}` : ""}</span>;
+  if (!quote) return <span className="status unavailable">Market Data Unavailable{error ? ` - ${error}` : ""}</span>;
   const badge = quote.source === "manual"
     ? <span className="status manual">Manual {quote.label.toLowerCase().replace("manual ", "")}</span>
     : quote.stale || quote.source === "cache"

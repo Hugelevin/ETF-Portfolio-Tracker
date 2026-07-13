@@ -79,7 +79,7 @@ export function MarketChart({ history, lots, mode, currency }: Props) {
           <Tooltip formatter={(value) => formatMoney(typeof value === "number" ? value : Number(value), currency)} labelStyle={{ color: "#162824" }} />
           {mode === "price" ? <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" /> : <>
             <Area type="monotone" dataKey="marketValue" name="Market Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" />
-            <Line type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={false} />
+            <Line type="stepAfter" dataKey="investedValue" name="Invested Amount" stroke="#d18b3f" strokeWidth={2} dot={false} />
           </>}
         </ComposedChart>
       </ResponsiveContainer>
@@ -87,7 +87,7 @@ export function MarketChart({ history, lots, mode, currency }: Props) {
     <details className="data-alternative">
       <summary>View Chart Data as a Table</summary>
       <div className="compact-table">
-        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Market Price</th></tr></thead><tbody>{priceData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical position values"><thead><tr><th>Date</th><th>Market Value</th><th>Invested Cost</th></tr></thead><tbody>{valueData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.marketValue, currency)}</td><td>{formatMoney(point.investedValue, currency)}</td></tr>)}</tbody></table>}
+        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Market Price</th></tr></thead><tbody>{priceData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical position values"><thead><tr><th>Date</th><th>Market Value</th><th>Invested Amount</th></tr></thead><tbody>{valueData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.marketValue, currency)}</td><td>{formatMoney(point.investedValue, currency)}</td></tr>)}</tbody></table>}
       </div>
     </details>
   </>;

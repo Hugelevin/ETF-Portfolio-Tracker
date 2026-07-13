@@ -96,7 +96,7 @@ describe("portfolio dashboard", () => {
   it("does not use a stored APY as a fund valuation when NAV is unavailable", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
-    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Daily fund NAV", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" };
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund - EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Daily fund NAV", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
 
     render(<App />);
@@ -108,7 +108,7 @@ describe("portfolio dashboard", () => {
   });
 
   it("uses cached fund NAV and shows Moneybase-style market return before fees", () => {
-    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund - EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
     window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
 
@@ -119,11 +119,30 @@ describe("portfolio dashboard", () => {
     expect(screen.queryByText(/Current APY/i)).not.toBeInTheDocument();
   });
 
+  it("keeps broker fees separate from invested capital and market return", () => {
+    const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 2, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 5 }] }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
+
+    render(<App />);
+
+    const summary = screen.getByRole("region", { name: "Your EUR Portfolio" });
+    expect(within(summary).getByText("€140.00")).toBeInTheDocument();
+    expect(within(summary).getByText("Broker Fees Paid Separately: €5.00")).toBeInTheDocument();
+    expect(within(summary).getByText("€20.00")).toBeInTheDocument();
+    expect(within(summary).queryByText(/Net After Fees/i)).not.toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "Price" })).toBeInTheDocument();
+    expect(within(table).queryByText("Price / NAV")).not.toBeInTheDocument();
+    expect(within(table).getByText("Broker Fees Paid: €5.00")).toBeInTheDocument();
+  });
+
   it("uses neutral market wording and Yahoo-only settings", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     expect(screen.queryByText(/best[- ]effort/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Market data with source and update time shown.")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const dialog = screen.getByRole("dialog", { name: "Settings" });
     expect(within(dialog).queryByLabelText(/EODHD/i)).not.toBeInTheDocument();
@@ -132,7 +151,7 @@ describe("portfolio dashboard", () => {
 
   it("automatically calculates the cash-fund annualised NAV yield", async () => {
     const user = userEvent.setup();
-    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund - EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
     window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
     render(<App />);

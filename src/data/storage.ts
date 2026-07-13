@@ -35,6 +35,7 @@ function applyInstrumentDefaults(portfolio: PortfolioDocument): PortfolioDocumen
       if (!verified || !identityMatches || !venueMatches) return instrument;
       return {
         ...instrument,
+        name: instrument.name.replaceAll("—", "-"),
         exchange: instrument.assetType === "FUND" && instrument.exchange !== verified.exchange
           ? verified.exchange
           : instrument.exchange,

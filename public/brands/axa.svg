@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 48" role="img" aria-label="AXA">
-  <rect width="120" height="48" rx="6" fill="#07549a"/>
-  <path d="M88 2 116 30" stroke="#e32636" stroke-width="4"/>
-  <text x="16" y="34" fill="#fff" font-family="Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="1">AXA</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="AXA">
+  <rect x="2" y="2" width="44" height="44" rx="5" fill="#07549a"/>
+  <path d="M32 3 45 16" stroke="#e32636" stroke-width="3"/>
+  <text x="8" y="31" fill="#fff" font-family="Arial, sans-serif" font-size="15" font-weight="700">AXA</text>
 </svg>

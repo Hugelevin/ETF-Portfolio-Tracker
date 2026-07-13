@@ -29,7 +29,7 @@ export interface PurchaseLot {
   fees: number;
 }
 
-export type MarketSource = "yahoo" | "manual" | "cache";
+export type MarketSource = "yahoo" | "cache";
 
 export interface MarketQuote {
   instrumentId: string;
@@ -100,12 +100,6 @@ export interface PortfolioSummary {
 
 export interface AppSettings {
   proxyUrl: string;
-}
-
-export interface ManualPrice {
-  instrumentId: string;
-  price: number;
-  asOf: string;
 }
 
 export type ChartRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "MAX";

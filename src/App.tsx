@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 import { DetailDialog } from "./components/DetailDialog";
 import { HoldingsTable } from "./components/HoldingsTable";
 import { ImportPreviewDialog } from "./components/ImportPreviewDialog";
@@ -11,7 +11,7 @@ import { createPortfolioStorage, exportPortfolioJson, importPortfolioJson } from
 import { calculatePortfolioSummary, calculatePosition } from "./domain/portfolio";
 import { fetchYahooRecord } from "./market/client";
 import { isValidMarketRecord, resolveMarketData } from "./market/service";
-import type { AppSettings, ChartRange, Instrument, ManualPrice, MarketRecord, PortfolioDocument, PositionMetrics, PurchaseLot } from "./types";
+import type { AppSettings, ChartRange, Instrument, MarketRecord, PortfolioDocument, PositionMetrics, PurchaseLot } from "./types";
 
 const browserStorage = createPortfolioStorage(window.localStorage);
 const cacheKey = (instrumentId: string, range: ChartRange) => `${instrumentId}:${range}`;
@@ -25,7 +25,7 @@ function freshestRecord(existing: MarketRecord | undefined, incoming: MarketReco
   if (!existing) return incoming;
   const asOfDifference = Date.parse(incoming.quote.asOf) - Date.parse(existing.quote.asOf);
   if (asOfDifference !== 0) return asOfDifference > 0 ? incoming : existing;
-  const priority = { yahoo: 3, cache: 2, manual: 1 } as const;
+  const priority = { yahoo: 2, cache: 1 } as const;
   const sourceDifference = priority[incoming.quote.source] - priority[existing.quote.source];
   if (sourceDifference !== 0) return sourceDifference > 0 ? incoming : existing;
   return Date.parse(incoming.quote.fetchedAt) > Date.parse(existing.quote.fetchedAt) ? incoming : existing;
@@ -34,7 +34,6 @@ function freshestRecord(existing: MarketRecord | undefined, incoming: MarketReco
 export default function App() {
   const [portfolio, setPortfolio] = useState(() => browserStorage.loadPortfolio());
   const [settings, setSettings] = useState(() => browserStorage.loadSettings());
-  const [manualPrices, setManualPrices] = useState(() => browserStorage.loadManualPrices());
   const [cache, setCache] = useState(() => browserStorage.loadMarketCache());
   const [records, setRecords] = useState<Record<string, MarketRecord>>(() => {
     const loaded = browserStorage.loadMarketCache();
@@ -89,7 +88,6 @@ export default function App() {
       yahoo: () => fetchYahooRecord(instrument, range, settings.proxyUrl),
       // A shorter cache must never masquerade as the selected chart range.
       cached: cache[selectedCacheKey],
-      manual: manualPrices[instrument.id],
     });
     const isLatestForRange = latestRangeRequest.current[selectedCacheKey] === rangeRequestId;
     if (resolution.record && isLatestForRange) {
@@ -130,7 +128,7 @@ export default function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(""), 15_000);
+    const timeout = window.setTimeout(() => setNotice(""), 5_000);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -153,13 +151,6 @@ export default function App() {
     persist({ ...portfolio, instruments: portfolio.instruments.filter((item) => item.id !== position.instrument.id), lots: portfolio.lots.filter((item) => item.instrumentId !== position.instrument.id) });
     setSelectedId(null);
   }
-  function saveManual(price: ManualPrice) {
-    const next = { ...manualPrices, [price.instrumentId]: price };
-    setManualPrices(next); browserStorage.saveManualPrices(next);
-    const instrument = portfolio.instruments.find((item) => item.id === price.instrumentId);
-    if (instrument) void refreshOne(instrument);
-  }
-
   function exportData() {
     const blob = new Blob([exportPortfolioJson(portfolio)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
@@ -172,16 +163,16 @@ export default function App() {
   }
   function applyImport() { if (!importPreview) return; persist(importPreview); setImportPreview(null); setRecords({}); setChartRecords({}); setNotice("Portfolio imported. Existing portfolio data was replaced."); }
   function clearPortfolio() {
-    if (!window.confirm("Clear the entire portfolio, manual prices and cached market data? This cannot be undone.")) return;
-    browserStorage.clearPortfolio(); const empty: PortfolioDocument = { schemaVersion: 1, baseCurrency: "EUR", instruments: [], lots: [] }; setPortfolio(empty); setRecords({}); setChartRecords({}); setCache({}); setManualPrices({}); setSelectedId(null);
+    if (!window.confirm("Clear the entire portfolio and cached market data? This cannot be undone.")) return;
+    browserStorage.clearPortfolio(); const empty: PortfolioDocument = { schemaVersion: 1, baseCurrency: "EUR", instruments: [], lots: [] }; setPortfolio(empty); setRecords({}); setChartRecords({}); setCache({}); setSelectedId(null);
   }
   function saveSettings(next: AppSettings) { browserStorage.saveSettings(next); setSettings(next); setSettingsOpen(false); setNotice("Market-data settings saved."); }
 
   return <div className="app-shell">
     <a className="skip-link" href="#main">Skip to portfolio</a>
-    <header className="topbar"><a className="brand" href="./" aria-label="ETF Portfolio Tracker home"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="ETF Portfolio Tracker" /></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> Settings</button><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add Purchase</button></nav></header>
-    {!navigator.onLine && <div className="global-banner" role="status">You are offline. Cached or manual prices may still be available.</div>}
-    {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}>×</button></div>}
+    <header className="topbar"><a className="brand" href="./" aria-label="ETF Portfolio Tracker home"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="ETF Portfolio Tracker" /></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> <span>Settings</span></button><button className="button primary add-purchase" aria-label="Add Purchase" onClick={() => setPurchaseOpen(true)}><Plus /> <span className="desktop-label">Add Purchase</span><span className="mobile-label">Add</span></button></nav></header>
+    {!navigator.onLine && <div className="global-banner" role="status">You are offline. The last saved market update may still be available.</div>}
+    {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}><X aria-hidden="true" /></button></div>}
     <main id="main">
       <div className="page-heading"><div><p className="eyebrow">Private - Local to This Browser</p><h1>Portfolio Dashboard</h1></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
       <SummaryCards summary={summary} positions={positions} />
@@ -191,7 +182,7 @@ export default function App() {
     <footer className="site-footer"><p><ShieldCheck aria-hidden="true" /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} onSave={addLot} />}
     {settingsOpen && <SettingsDialog value={settings} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />}
-    {selected && <DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} />}
+    {selected && <DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} />}
     {importPreview && <ImportPreviewDialog portfolio={importPreview} onCancel={() => setImportPreview(null)} onApply={applyImport} />}
   </div>;
 }

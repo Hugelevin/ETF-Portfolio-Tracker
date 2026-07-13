@@ -1,17 +1,16 @@
 # ETF Portfolio Tracker
 
-A private, local-first React dashboard for EUR-traded UCITS ETFs and one Moneybase cash fund. It builds as static files for GitHub Pages. Orders, settings, manual prices and market cache live only in the browser.
+A private, local-first React dashboard for EUR-traded UCITS ETFs and one Moneybase cash fund. It builds as static files for GitHub Pages. Orders, settings and the market cache live only in the browser.
 
 The application prioritises honest data states over apparent completeness: missing prices remain unavailable, stale data is labelled, and combined totals report their coverage.
 
 ## Architecture
 
 - **React + TypeScript + Vite**: static dashboard deployed to GitHub Pages.
-- **Browser localStorage**: separate versioned records for portfolio, settings, manual prices and market cache.
+- **Browser localStorage**: separate versioned records for portfolio, settings and market cache.
 - **Cloudflare Worker**: a stateless, narrow CORS adapter. It accepts only validated market symbols and never receives shares, purchase prices, dates or fees.
 - **Yahoo Finance chart feed**: free, undocumented current-session ETF prices, historical ETF data and daily fund NAV data.
 - **Moneybase cash-fund model**: published NAV values the position; a trailing 7-day annualised NAV yield is recalculated automatically for context.
-- **Manual price or NAV**: final fallback, always visibly labelled.
 
 No analytics, cookies, accounts, external databases or portfolio server are used.
 
@@ -50,7 +49,7 @@ netReturn = currentValue − totalCost
 netReturnPercentage = netReturn ÷ totalCost × 100
 ```
 
-For UMMEPSA, published NAV is authoritative. If NAV is unavailable, the value and return remain unavailable unless you enter a clearly labelled manual NAV. A yield percentage is never used to invent a fund balance.
+For UMMEPSA, published NAV is authoritative. If NAV is unavailable, the value and return remain unavailable. A yield percentage is never used to invent a fund balance.
 
 Missing prices are never replaced with zero. Non-EUR positions may be imported, but are excluded from combined EUR totals and reported in coverage.
 
@@ -121,10 +120,9 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 - Yahoo's chart endpoint is undocumented and unsupported. It may be delayed, rate-limited, changed or unavailable without notice. ETF responses must match the exact provider symbol, trading currency, exchange venue and instrument type. Fund NAV responses must match the exact provider symbol, trading currency and fund type; the provider venue is shown separately because Moneybase is the descriptive holding venue rather than Yahoo's NAV host venue. The parser uses the latest non-null timestamped chart point.
 - Public Yahoo responses are cached briefly at the Worker and the last successful response is cached locally in the browser.
 - UMMEPSA uses daily Yahoo fund NAV data. Its displayed 7-day annualised NAV yield is calculated automatically from that history and is informational only.
-- Manual ETF prices and fund NAV values are visibly labelled, have an as-of date, and do not provide daily-change figures.
 - Each quote shows source, provider exchange, market timestamp, fetch timestamp and stale state.
 
-Fallback order is: Yahoo request → cached Yahoo → manual price/NAV → unavailable.
+Fallback order is: Yahoo request → cached Yahoo → unavailable.
 
 Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default chart plots the raw market price or NAV. The optional **Value vs Invested** view excludes broker fees and starts at the first purchase, so it never plots a misleading zero before shares were owned. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
 
@@ -185,11 +183,15 @@ Because Yahoo is an undocumented source, a temporary provider failure should be 
 
 For a custom domain hosted at its root, set `VITE_BASE_PATH=/` in an adjusted workflow.
 
+### Add to a phone home screen
+
+After deployment, open the GitHub Pages URL in Safari or Chrome and choose **Add to Home Screen**. The included web-app manifest opens the tracker in a standalone window and retains the same browser-local portfolio data.
+
 ## Privacy, backup and recovery
 
 Browser storage can be cleared by private-browsing mode, browser cleanup, device loss or site-origin changes. Export JSON after material changes and keep it in an encrypted personal backup. A different Pages domain or repository name is a different browser origin and will not see the old localStorage; import your backup there.
 
-Clearing the portfolio removes portfolio, manual-price and cache records. The Worker URL remains in browser settings so the dashboard can reconnect after a portfolio import.
+Clearing the portfolio removes portfolio and cache records, including any obsolete manual-price record left by an older version. The Worker URL remains in browser settings so the dashboard can reconnect after a portfolio import.
 
 ## Scope and disclaimer
 

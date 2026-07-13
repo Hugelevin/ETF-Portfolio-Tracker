@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ChevronDown, Table2 } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { buildPositionValueHistory, calculateChartDomain } from "../domain/portfolio";
 import { formatMoney } from "../format";
@@ -85,7 +86,7 @@ export function MarketChart({ history, lots, mode, currency }: Props) {
       </ResponsiveContainer>
     </div>
     <details className="data-alternative">
-      <summary>View Chart Data as a Table</summary>
+      <summary><Table2 aria-hidden="true" /><span>View Chart Data as a Table</span><ChevronDown className="data-chevron" aria-hidden="true" /></summary>
       <div className="compact-table">
         {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Market Price</th></tr></thead><tbody>{priceData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical position values"><thead><tr><th>Date</th><th>Market Value</th><th>Invested Amount</th></tr></thead><tbody>{valueData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.marketValue, currency)}</td><td>{formatMoney(point.investedValue, currency)}</td></tr>)}</tbody></table>}
       </div>

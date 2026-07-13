@@ -84,9 +84,61 @@ test("keeps the mobile brand and add action balanced", async ({ page }) => {
   expect(brand).not.toBeNull();
   expect(add).not.toBeNull();
   expect(brand!.width).toBeGreaterThan(170);
-  expect(add!.width).toBeGreaterThanOrEqual(44);
-  expect(add!.width).toBeLessThanOrEqual(48);
-  expect(add!.height).toBe(add!.width);
+  expect(add!.width).toBeGreaterThanOrEqual(72);
+  expect(add!.width).toBeLessThanOrEqual(90);
+  expect(add!.height).toBeGreaterThanOrEqual(44);
+});
+
+test("keeps the primary mobile controls touch friendly and compact", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const toastClose = await page.getByRole("button", { name: "Dismiss notification" }).boundingBox();
+  expect(toastClose).not.toBeNull();
+  expect(toastClose!.width).toBeGreaterThanOrEqual(44);
+  expect(toastClose!.height).toBeGreaterThanOrEqual(44);
+
+  const logoTile = await page.locator(".instrument-logo").first().boundingBox();
+  const logoMark = await page.locator(".instrument-logo img").first().boundingBox();
+  expect(logoTile).not.toBeNull();
+  expect(logoMark).not.toBeNull();
+  expect(logoMark!.width / logoTile!.width).toBeGreaterThan(.96);
+  expect(logoMark!.height / logoTile!.height).toBeGreaterThan(.96);
+
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
+  await expect(page.getByText(/Manual Price Fallback/i)).toHaveCount(0);
+
+  for (const name of ["Price", "Value vs Invested", "1D", "1W", "1M", "3M", "1Y", "MAX"]) {
+    const control = await page.getByRole("button", { name, exact: true }).boundingBox();
+    expect(control).not.toBeNull();
+    expect(control!.height).toBeGreaterThanOrEqual(44);
+  }
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBe(0);
+});
+
+test("does not overflow on the narrowest supported phone", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/");
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBe(0);
+  await expect(page.getByRole("button", { name: "Add Purchase" })).toBeVisible();
+});
+
+test("keeps the full-screen detail usable in phone landscape", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+
+  const close = await page.getByRole("button", { name: "Close details" }).boundingBox();
+  expect(close).not.toBeNull();
+  expect(close!.x).toBeGreaterThanOrEqual(0);
+  expect(close!.x + close!.width).toBeLessThanOrEqual(844);
+  expect(close!.y).toBeGreaterThanOrEqual(0);
+  expect(close!.height).toBeGreaterThanOrEqual(44);
 });
 
 test("shows an explicit rate-limit error without inventing a price", async ({ page }) => {

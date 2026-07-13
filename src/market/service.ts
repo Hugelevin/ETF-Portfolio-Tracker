@@ -1,6 +1,6 @@
-import type { Instrument, ManualPrice, MarketRecord } from "../types";
+import type { Instrument, MarketRecord } from "../types";
 
-export type MarketAvailability = "available" | "cached" | "manual" | "unavailable";
+export type MarketAvailability = "available" | "cached" | "unavailable";
 
 export interface MarketResolution {
   record: MarketRecord | null;
@@ -12,8 +12,6 @@ interface ResolveOptions {
   instrument: Instrument;
   yahoo: () => Promise<MarketRecord>;
   cached?: MarketRecord;
-  manual?: ManualPrice;
-  fetchedAt?: string;
 }
 
 export function isValidMarketRecord(record: MarketRecord | undefined, instrument: Instrument): record is MarketRecord {
@@ -54,34 +52,5 @@ export async function resolveMarketData(options: ResolveOptions): Promise<Market
     };
   }
 
-  const manual = options.manual;
-  if (manual && manual.instrumentId === options.instrument.id && positiveManual(manual)) {
-    const asOf = /^\d{4}-\d{2}-\d{2}$/.test(manual.asOf)
-      ? `${manual.asOf}T23:59:59.000Z`
-      : new Date(manual.asOf).toISOString();
-    return {
-      record: {
-        quote: {
-          instrumentId: options.instrument.id,
-          price: manual.price,
-          previousClose: null,
-          currency: options.instrument.currency,
-          exchange: options.instrument.exchange,
-          asOf,
-          fetchedAt: options.fetchedAt ?? new Date().toISOString(),
-          source: "manual",
-          label: options.instrument.assetType === "FUND" ? "Manual NAV" : "Manual Price",
-          stale: true,
-        },
-        history: [{ timestamp: asOf, close: manual.price }],
-      },
-      status: "manual",
-      errors,
-    };
-  }
-
   return { record: null, status: "unavailable", errors };
 }
-
-const positiveManual = (value: ManualPrice) =>
-  Number.isFinite(value.price) && value.price > 0 && !Number.isNaN(Date.parse(value.asOf));

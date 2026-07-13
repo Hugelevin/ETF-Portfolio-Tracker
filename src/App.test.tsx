@@ -71,7 +71,10 @@ describe("portfolio dashboard", () => {
     const user = userEvent.setup();
     const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1Y": { quote: { instrumentId: instrument.id, price: 82, previousClose: 81, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-01T10:00:00Z", close: 70 }, { timestamp: "2026-07-13T10:00:00Z", close: 82 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({
+      "jedi-xetra-eur:3M": { quote: { instrumentId: instrument.id, price: 61, previousClose: 60, currency: "EUR", exchange: "XETRA", asOf: "2026-06-01T10:00:00Z", fetchedAt: "2026-06-01T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-05-25T10:00:00Z", close: 60 }, { timestamp: "2026-06-01T10:00:00Z", close: 61 }] },
+      "jedi-xetra-eur:1Y": { quote: { instrumentId: instrument.id, price: 82, previousClose: 81, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-01T10:00:00Z", close: 70 }, { timestamp: "2026-07-13T10:00:00Z", close: 82 }] },
+    }));
 
     render(<App />);
 
@@ -96,6 +99,7 @@ describe("portfolio dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
 
     expect(screen.getByRole("heading", { name: "Market Price History" })).toBeInTheDocument();
+    expect(screen.queryByText(/Manual Price Fallback/i)).not.toBeInTheDocument();
     await user.click(screen.getByText("View Chart Data as a Table"));
     const table = screen.getByRole("table", { name: "Historical market prices" });
     expect(within(table).getByText("€78.00")).toBeInTheDocument();
@@ -116,13 +120,13 @@ describe("portfolio dashboard", () => {
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
   });
 
-  it("automatically dismisses update notifications after 15 seconds", () => {
+  it("automatically dismisses update notifications after 5 seconds", () => {
     vi.useFakeTimers();
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Load Public Sample" }));
     expect(screen.getByText("Public VanEck sample loaded.")).toBeInTheDocument();
 
-    act(() => vi.advanceTimersByTime(15_000));
+    act(() => vi.advanceTimersByTime(5_000));
 
     expect(screen.queryByText("Public VanEck sample loaded.")).not.toBeInTheDocument();
     vi.useRealTimers();

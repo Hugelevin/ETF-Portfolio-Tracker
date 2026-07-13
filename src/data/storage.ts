@@ -2,7 +2,6 @@ import { emptyPortfolio, parsePortfolioDocument } from "../domain/schema";
 import { VERIFIED_INSTRUMENTS } from "../config/instruments";
 import type {
   AppSettings,
-  ManualPrice,
   MarketRecord,
   PortfolioDocument,
 } from "../types";
@@ -10,7 +9,7 @@ import type {
 const KEYS = {
   portfolio: "etf-tracker.portfolio.v1",
   settings: "etf-tracker.settings.v1",
-  manualPrices: "etf-tracker.manual-prices.v1",
+  legacyManualPrices: "etf-tracker.manual-prices.v1",
   marketCache: "etf-tracker.market-cache.v1",
 } as const;
 const LEGACY_EODHD_KEY = "etf-tracker.api-key.eodhd.v1";
@@ -76,7 +75,7 @@ export function createPortfolioStorage(storage: Storage) {
     clearPortfolio(): void {
       storage.removeItem(KEYS.portfolio);
       storage.removeItem(KEYS.marketCache);
-      storage.removeItem(KEYS.manualPrices);
+      storage.removeItem(KEYS.legacyManualPrices);
     },
     loadSettings(): AppSettings {
       const publicSettings = parseJson<Partial<AppSettings>>(
@@ -95,12 +94,6 @@ export function createPortfolioStorage(storage: Storage) {
         KEYS.settings,
         JSON.stringify({ proxyUrl: settings.proxyUrl.trim() }),
       );
-    },
-    loadManualPrices(): Record<string, ManualPrice> {
-      return parseJson(storage.getItem(KEYS.manualPrices), {});
-    },
-    saveManualPrices(prices: Record<string, ManualPrice>): void {
-      storage.setItem(KEYS.manualPrices, JSON.stringify(prices));
     },
     loadMarketCache(): Record<string, MarketRecord> {
       return parseJson(storage.getItem(KEYS.marketCache), {});

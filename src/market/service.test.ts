@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Instrument, ManualPrice, MarketRecord } from "../types";
+import type { Instrument, MarketRecord } from "../types";
 import { resolveMarketData } from "./service";
 
 const instrument: Instrument = {
@@ -37,22 +37,10 @@ describe("resolveMarketData", () => {
     expect(result.status).toBe("available");
   });
 
-  it("falls back through cache, manual and unavailable in that order", async () => {
+  it("falls back through cache and then reports unavailable", async () => {
     const failed = vi.fn().mockRejectedValue(new Error("offline"));
     const cached = await resolveMarketData({ instrument, yahoo: failed, cached: record("cache") });
     expect(cached.record?.quote.source).toBe("cache");
-
-    const manual: ManualPrice = { instrumentId: instrument.id, price: 77, asOf: "2026-07-12" };
-    const manualResult = await resolveMarketData({ instrument, yahoo: failed, manual });
-    expect(manualResult.record?.quote.source).toBe("manual");
-    expect(manualResult.record?.quote.previousClose).toBeNull();
-
-    const fundResult = await resolveMarketData({
-      instrument: { ...instrument, assetType: "FUND", exchange: "Daily fund NAV" },
-      yahoo: failed,
-      manual,
-    });
-    expect(fundResult.record?.quote.label).toBe("Manual NAV");
 
     const missing = await resolveMarketData({ instrument, yahoo: failed });
     expect(missing.record).toBeNull();

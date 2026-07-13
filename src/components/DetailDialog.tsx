@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { ChartNoAxesCombined, Pencil, RefreshCw, Trash2, WalletCards, X } from "lucide-react";
 import { calculateAnnualisedYield, calculatePeriodPerformance } from "../domain/portfolio";
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from "../format";
 import { filterHistoryForRange } from "../market/history";
-import type { ChartRange, ManualPrice, MarketRecord, PositionMetrics, PurchaseLot } from "../types";
+import type { ChartRange, MarketRecord, PositionMetrics, PurchaseLot } from "../types";
 import { InstrumentLogo } from "./InstrumentLogo";
 import { MarketChart, type ChartMode } from "./MarketChart";
 import { StatusBadge } from "./StatusBadge";
@@ -20,10 +20,9 @@ interface Props {
   onRange: (range: ChartRange) => void;
   onLotSave: (lot: PurchaseLot) => void;
   onLotDelete: (lot: PurchaseLot) => void;
-  onManualPrice: (price: ManualPrice) => void;
 }
 
-export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete, onManualPrice }: Props) {
+export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete }: Props) {
   const [range, setRange] = useState<ChartRange>("1M");
   const [chartMode, setChartMode] = useState<ChartMode>("price");
   const [editing, setEditing] = useState<PurchaseLot | null>(null);
@@ -32,11 +31,11 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
   const history = useMemo(() => record?.history ?? [], [record]);
   // Prefer daily history long enough for calendar-month performance. This is
   // independent of the selected chart range so headline metrics stay stable.
-  const metricsHistory = getRecord("3M")?.history
-    ?? getRecord("1Y")?.history
-    ?? getRecord("MAX")?.history
-    ?? getRecord("1M")?.history
-    ?? history;
+  const metricsRecord = (["3M", "1Y", "MAX", "1M"] as ChartRange[])
+    .map((candidateRange) => getRecord(candidateRange))
+    .filter((candidate): candidate is MarketRecord => Boolean(candidate?.history.length))
+    .sort((a, b) => Date.parse(b.quote.asOf) - Date.parse(a.quote.asOf))[0];
+  const metricsHistory = metricsRecord?.history ?? history;
   const weekly = calculatePeriodPerformance(metricsHistory, "1W");
   const monthly = calculatePeriodPerformance(metricsHistory, "1M");
   const annualisedYield = calculateAnnualisedYield(metricsHistory, 7);
@@ -46,14 +45,6 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
   function changeRange(next: ChartRange) {
     setRange(next);
     onRange(next);
-  }
-
-  function setManual(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const price = Number(data.get("manualPrice"));
-    const asOf = String(data.get("manualDate"));
-    if (price > 0 && asOf) onManualPrice({ instrumentId: instrument.id, price, asOf });
   }
 
   return <div className="modal-backdrop detail-backdrop" role="presentation">
@@ -91,8 +82,8 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           <div className="chart-toolbar">
             <div><p className="eyebrow">Performance</p><h3 id="chart-title">{chartMode === "price" ? (instrument.assetType === "FUND" ? "NAV History" : "Market Price History") : "Position Value vs Invested Amount"}</h3></div>
             <div className="view-controls" role="group" aria-label="Chart view">
-              <button type="button" className={chartMode === "price" ? "active" : ""} aria-pressed={chartMode === "price"} onClick={() => setChartMode("price")}>{instrument.assetType === "FUND" ? "NAV" : "Market Price"}</button>
-              <button type="button" className={chartMode === "value" ? "active" : ""} aria-pressed={chartMode === "value"} onClick={() => setChartMode("value")}>Value vs Invested</button>
+              <button type="button" className={chartMode === "price" ? "active" : ""} aria-pressed={chartMode === "price"} onClick={() => setChartMode("price")}><ChartNoAxesCombined aria-hidden="true" /> {instrument.assetType === "FUND" ? "NAV" : "Price"}</button>
+              <button type="button" className={chartMode === "value" ? "active" : ""} aria-pressed={chartMode === "value"} onClick={() => setChartMode("value")}><WalletCards aria-hidden="true" /> Value vs Invested</button>
             </div>
           </div>
           <div className="range-controls" aria-label="Chart time range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={() => changeRange(item)}>{item}</button>)}</div>
@@ -105,14 +96,6 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           <div className="compact-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{lot.purchaseDate}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit order from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete order from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
         </section>
 
-        <details className="manual-panel">
-          <summary><span><strong>Manual {instrument.assetType === "FUND" ? "NAV" : "Price"} Fallback</strong><small>Only needed when Yahoo and the saved market update are unavailable.</small></span></summary>
-          <form onSubmit={setManual}>
-            <label>{instrument.assetType === "FUND" ? "NAV" : "Price"}<input name="manualPrice" type="number" min="0.000001" step="any" required /></label>
-            <label>As-of Date<input name="manualDate" type="date" required /></label>
-            <button className="button secondary" type="submit">Save Manual Value</button>
-          </form>
-        </details>
       </div>
 
       {editing && <LotEditor lot={editing} onClose={() => setEditing(null)} onSave={(lot) => { onLotSave(lot); setEditing(null); }} />}

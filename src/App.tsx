@@ -9,7 +9,8 @@ import { SummaryCards } from "./components/SummaryCards";
 import { SAMPLE_PORTFOLIO } from "./config/samplePortfolio";
 import { createPortfolioStorage, exportPortfolioJson, importPortfolioJson } from "./data/storage";
 import { calculatePortfolioSummary, calculatePosition } from "./domain/portfolio";
-import { fetchEodhdRecord, fetchYahooRecord } from "./market/client";
+import { toLocalIsoDate } from "./format";
+import { fetchYahooRecord } from "./market/client";
 import { mergeHistory } from "./market/history";
 import { isValidMarketRecord, resolveMarketData } from "./market/service";
 import type { AppSettings, ChartRange, Instrument, ManualPrice, MarketRecord, PortfolioDocument, PositionMetrics, PurchaseLot } from "./types";
@@ -18,7 +19,7 @@ const browserStorage = createPortfolioStorage(window.localStorage);
 const cacheKey = (instrumentId: string, range: ChartRange) => `${instrumentId}:${range}`;
 
 function asStaleCache(value: MarketRecord, instrument: Instrument | undefined): MarketRecord | null {
-  if (!instrument || !isValidMarketRecord(value, instrument)) return null;
+  if (!instrument || instrument.assetType === "FUND" || !isValidMarketRecord(value, instrument)) return null;
   return { ...value, quote: { ...value.quote, source: "cache", stale: true, label: "Cached price — last successful update" } };
 }
 
@@ -47,21 +48,22 @@ export default function App() {
   const positions = useMemo(() => portfolio.instruments.flatMap((instrument): PositionMetrics[] => {
     const lots = portfolio.lots.filter((lot) => lot.instrumentId === instrument.id);
     if (!lots.length) return [];
-    return [calculatePosition(instrument, lots, records[instrument.id]?.quote ?? null)];
+    const quote = instrument.assetType === "FUND" ? null : records[instrument.id]?.quote ?? null;
+    return [calculatePosition(instrument, lots, quote)];
   }), [portfolio, records]);
   const summary = useMemo(() => calculatePortfolioSummary(positions, portfolio.baseCurrency), [positions, portfolio.baseCurrency]);
   const selected = positions.find((position) => position.instrument.id === selectedId) ?? null;
 
-  function persist(next: PortfolioDocument) { browserStorage.savePortfolio(next); setPortfolio(next); }
+  function persist(next: PortfolioDocument) { setPortfolio(browserStorage.savePortfolio(next)); }
 
   async function refreshOne(instrument: Instrument, range: ChartRange = "1M") {
+    if (instrument.assetType === "FUND") return;
     setLoading((current) => new Set(current).add(instrument.id));
     setErrors((current) => ({ ...current, [instrument.id]: "" }));
     const resolution = await resolveMarketData({
       instrument,
       yahoo: () => fetchYahooRecord(instrument, range, settings.proxyUrl),
       cached: cache[cacheKey(instrument.id, range)] ?? cache[cacheKey(instrument.id, "1M")],
-      eodhd: settings.eodhdApiKey && instrument.eodhdSymbol ? () => fetchEodhdRecord(instrument, settings.proxyUrl, settings.eodhdApiKey) : undefined,
       manual: manualPrices[instrument.id],
     });
     if (resolution.record) {
@@ -88,7 +90,7 @@ export default function App() {
 
   async function refreshAll() {
     if (!positions.length) return;
-    await Promise.all(positions.map((position) => refreshOne(position.instrument)));
+    await Promise.all(positions.filter((position) => position.instrument.assetType === "ETF").map((position) => refreshOne(position.instrument)));
     setNotice("Market data refresh finished.");
   }
 
@@ -124,6 +126,30 @@ export default function App() {
     if (instrument) void refreshOne(instrument);
   }
 
+  function saveAnnualYield(instrumentId: string, annualYieldPercentage: number) {
+    if (!Number.isFinite(annualYieldPercentage) || annualYieldPercentage < 0) return;
+    const effectiveDate = toLocalIsoDate();
+    const instrumentLots = portfolio.lots.filter((lot) => lot.instrumentId === instrumentId);
+    const next = {
+      ...portfolio,
+      instruments: portfolio.instruments.map((instrument) => instrument.id === instrumentId
+        ? {
+            ...instrument,
+            annualYieldPercentage,
+            annualYieldHistory: updateAnnualYieldHistory(
+              instrument.annualYieldHistory,
+              instrument.annualYieldPercentage ?? 0,
+              annualYieldPercentage,
+              effectiveDate,
+              instrumentLots.map((lot) => lot.purchaseDate).sort()[0] ?? effectiveDate,
+            ),
+          }
+        : instrument),
+    };
+    persist(next);
+    setNotice("Cash-fund APY updated.");
+  }
+
   function exportData() {
     const blob = new Blob([exportPortfolioJson(portfolio)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
@@ -147,15 +173,31 @@ export default function App() {
     {!navigator.onLine && <div className="global-banner" role="status">You are offline. Cached or manual prices may still be available.</div>}
     {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}>×</button></div>}
     <main id="main">
-      <div className="page-heading"><div><p className="eyebrow">Private · local to this browser</p><h1>Portfolio dashboard</h1><p>Best-effort market data with every source and timestamp shown.</p></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh prices"}</button></div>
+      <div className="page-heading"><div><p className="eyebrow">Private · local to this browser</p><h1>Portfolio dashboard</h1><p>Market data with source and update time shown.</p></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh prices"}</button></div>
       <SummaryCards summary={summary} positions={positions} />
       {!positions.length ? <section className="empty-state"><div className="empty-icon"><ShieldCheck /></div><p className="eyebrow">Nothing leaves your device</p><h2>Build your private portfolio</h2><p>Add a purchase or import the private JSON template. Purchase details stay in localStorage and never go to market providers.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add first purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load public sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
-      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local data</p><h2 id="data-title">Import, export and recovery</h2><p>Exports contain instruments and purchase lots only. Provider keys and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear portfolio</button></div></section>
+      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local data</p><h2 id="data-title">Import, export and recovery</h2><p>Exports contain instruments and purchase lots only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear portfolio</button></div></section>
     </main>
-    <footer className="site-footer"><p><ShieldCheck /> Portfolio data remains on this device.</p><p>Prices: latest available — best effort, never guaranteed real-time.</p></footer>
+    <footer className="site-footer"><p><ShieldCheck /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} onSave={addLot} />}
     {settingsOpen && <SettingsDialog value={settings} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />}
-    {selected && <DetailDialog position={selected} record={records[selected.instrument.id] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} />}
+    {selected && <DetailDialog position={selected} record={records[selected.instrument.id] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} onManualPrice={saveManual} onAnnualYieldSave={(value) => saveAnnualYield(selected.instrument.id, value)} />}
     {importPreview && <ImportPreviewDialog portfolio={importPreview} onCancel={() => setImportPreview(null)} onApply={applyImport} />}
   </div>;
+}
+
+function updateAnnualYieldHistory(
+  history: Instrument["annualYieldHistory"],
+  previousRate: number,
+  nextRate: number,
+  effectiveDate: string,
+  firstDepositDate: string,
+) {
+  const seeded = history?.length
+    ? history
+    : [{ effectiveDate: firstDepositDate, annualYieldPercentage: previousRate }];
+  return [
+    ...seeded.filter((rate) => rate.effectiveDate !== effectiveDate),
+    { effectiveDate, annualYieldPercentage: nextRate },
+  ].sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate));
 }

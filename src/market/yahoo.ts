@@ -60,6 +60,17 @@ function toHistory(result: UnknownRecord): MarketPoint[] {
   }).sort((left, right) => left.timestamp.localeCompare(right.timestamp));
 }
 
+function previousTradingClose(history: MarketPoint[]): number | null {
+  const latest = history.at(-1);
+  if (!latest) return null;
+  const latestDate = latest.timestamp.slice(0, 10);
+  for (let index = history.length - 2; index >= 0; index -= 1) {
+    const point = history[index];
+    if (point && point.timestamp.slice(0, 10) < latestDate) return point.close;
+  }
+  return null;
+}
+
 export function parseYahooChart(
   instrument: Instrument,
   payload: unknown,
@@ -89,9 +100,14 @@ export function parseYahooChart(
   const fetchedMs = Date.parse(fetchedAt);
   const asOfMs = Date.parse(latest.timestamp);
   const staleAfterMs = instrument.assetType === "FUND" ? 72 * 60 * 60 * 1_000 : 24 * 60 * 60 * 1_000;
-  const previousClose = finitePositive(meta.chartPreviousClose)
-    ? meta.chartPreviousClose
-    : finitePositive(meta.previousClose) ? meta.previousClose : null;
+  const timestampedPreviousClose = previousTradingClose(history);
+  const previousClose = timestampedPreviousClose ?? (
+    finitePositive(meta.regularMarketPreviousClose)
+      ? meta.regularMarketPreviousClose
+      : finitePositive(meta.chartPreviousClose)
+        ? meta.chartPreviousClose
+        : finitePositive(meta.previousClose) ? meta.previousClose : null
+  );
 
   return {
     quote: {
@@ -103,7 +119,7 @@ export function parseYahooChart(
       asOf: latest.timestamp,
       fetchedAt,
       source: "yahoo",
-      label: "Latest available — best effort",
+      label: "Market data",
       stale: Number.isFinite(fetchedMs) && fetchedMs - asOfMs > staleAfterMs,
     },
     history,

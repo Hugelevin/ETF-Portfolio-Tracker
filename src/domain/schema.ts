@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { PortfolioDocument } from "../types";
+import { toLocalIsoDate } from "../format";
 
 const finitePositive = z.number().finite().positive();
 const isoDate = z
@@ -11,7 +12,7 @@ const isoDate = z
     return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === (month ?? 1) - 1 && parsed.getUTCDate() === day;
   }, "Use a valid purchase date");
 
-export const instrumentSchema = z
+const legacyInstrumentSchema = z
   .object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
@@ -21,10 +22,25 @@ export const instrumentSchema = z
     micCode: z.string().trim().min(1).max(12).optional(),
     currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
     assetType: z.enum(["ETF", "FUND"]),
-    yahooSymbol: z.string().trim().min(1).max(50),
+    yahooSymbol: z.string().trim().min(1).max(50).optional(),
+    annualYieldPercentage: z.number().finite().nonnegative().max(100).optional(),
+    annualYieldHistory: z.array(z.object({
+      effectiveDate: isoDate,
+      annualYieldPercentage: z.number().finite().nonnegative().max(100),
+    }).strict()).optional(),
     eodhdSymbol: z.string().trim().min(1).max(50).optional(),
   })
   .strict();
+
+export const instrumentSchema = legacyInstrumentSchema.transform((instrument) => {
+  const migrated = { ...instrument };
+  delete migrated.eodhdSymbol;
+  const latestRate = [...(migrated.annualYieldHistory ?? [])]
+    .sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate))
+    .at(-1);
+  if (latestRate) migrated.annualYieldPercentage = latestRate.annualYieldPercentage;
+  return migrated;
+});
 
 export const purchaseLotSchema = z
   .object({
@@ -49,6 +65,22 @@ export const portfolioDocumentSchema = z
     const instrumentIds = new Set<string>();
     const instrumentIdentities = new Set<string>();
     portfolio.instruments.forEach((instrument, index) => {
+      instrument.annualYieldHistory?.forEach((rate, rateIndex) => {
+        if (rate.effectiveDate > toLocalIsoDate()) {
+          context.addIssue({
+            code: "custom",
+            message: "APY effective dates cannot be in the future",
+            path: ["instruments", index, "annualYieldHistory", rateIndex, "effectiveDate"],
+          });
+        }
+      });
+      if (instrument.assetType === "ETF" && !instrument.yahooSymbol) {
+        context.addIssue({
+          code: "custom",
+          message: `Yahoo symbol is required for ETF: ${instrument.ticker}`,
+          path: ["instruments", index, "yahooSymbol"],
+        });
+      }
       if (instrumentIds.has(instrument.id)) {
         context.addIssue({
           code: "custom",

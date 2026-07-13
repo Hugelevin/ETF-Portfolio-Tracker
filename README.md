@@ -1,17 +1,17 @@
 # Personal EUR Portfolio Tracker
 
-A private, local-first React dashboard for EUR-traded UCITS ETFs and one daily-NAV money-market fund. It builds as static files for GitHub Pages. Purchase lots, settings, manual prices and market cache live only in the browser.
+A private, local-first React dashboard for EUR-traded UCITS ETFs and one Moneybase cash fund. It builds as static files for GitHub Pages. Purchase lots, settings, manual prices and market cache live only in the browser.
 
 The application prioritises honest data states over apparent completeness: missing prices remain unavailable, stale data is labelled, and combined totals report their coverage.
 
 ## Architecture
 
 - **React + TypeScript + Vite**: static dashboard deployed to GitHub Pages.
-- **Browser localStorage**: separate versioned records for portfolio, settings, EODHD key, manual prices and market cache.
+- **Browser localStorage**: separate versioned records for portfolio, settings, manual prices and market cache.
 - **Cloudflare Worker**: a stateless, narrow CORS adapter. It accepts only validated market symbols and never receives shares, purchase prices, dates or fees.
-- **Yahoo Finance chart feed**: free, undocumented, best-effort current-session and historical data.
-- **EODHD**: optional end-of-day fallback. Its API key is stored only in browser localStorage and sent to the configured Worker when a fallback is required.
-- **Manual price or NAV**: final fallback, always visibly labelled.
+- **Yahoo Finance chart feed**: free, undocumented current-session and historical ETF data.
+- **Moneybase cash-fund estimate**: deposit cost accrues daily using a user-editable APY.
+- **Manual ETF price**: final fallback, always visibly labelled.
 
 No analytics, cookies, accounts, external databases or portfolio server are used.
 
@@ -22,7 +22,7 @@ Positions are identified by ISIN, venue and trading currency—not ticker alone.
 | Holding | Type | Venue | Trading currency | Yahoo symbol |
 |---|---|---|---|---|
 | ANAU · IE000QDFFK00 | ETF | Milan | EUR | `ANAU-ETFP.MI` |
-| UMMEPSA · IE00BWWCR731 | Money-market fund, P Acc | Daily NAV | EUR | `0P0001CD0Q.F` |
+| UMMEPSA · IE00BWWCR731 | Money-market fund, P Acc | Moneybase cash fund | EUR | APY estimate |
 | SPYY · IE00B44Z5B48 | ETF | Xetra | EUR | `SPYY.DE` |
 | VVSM · IE00BMC38736 | ETF | Xetra | EUR | `VVSM.DE` |
 | JEDI · IE000YU9K6K2 | ETF | Xetra | EUR | `JEDI.DE` |
@@ -30,7 +30,7 @@ Positions are identified by ISIN, venue and trading currency—not ticker alone.
 | QUTM · IE0007Y8Y157 | ETF | Xetra | EUR | `QUTM.DE` |
 | VUAA · IE00BFMXXD54 | ETF | Xetra | EUR | `VUAA.DE` |
 
-UMMEPSA is deliberately treated as a fund with daily NAV, not an intraday ETF. For all instruments, EUR is the **trading currency** of this configured venue; it need not be the fund's base currency.
+UMMEPSA is deliberately treated as a Moneybase cash-fund balance, not as exchange-traded UBS NAV units. Its estimated balance compounds each recorded deposit at the configured APY. The first stored rate estimates the earlier period; when you update the APY in the holding detail view, the new rate is saved with its effective date so later changes do not rewrite earlier estimated earnings. For all instruments, EUR is the **trading currency** of this configured venue; it need not be the fund's base currency.
 
 ## Do fees need to be tracked?
 
@@ -45,6 +45,8 @@ currentValue = totalShares × latestPrice
 profitLoss = currentValue − totalCost
 profitLossPercentage = profitLoss ÷ totalCost × 100
 ```
+
+For UMMEPSA, each deposit's cost excluding fees is compounded daily using the configured APY instead of multiplying Moneybase units by the official UBS NAV. The displayed balance and return are estimates.
 
 Missing prices are never replaced with zero. Non-EUR positions may be imported, but are excluded from combined EUR totals and reported in coverage.
 
@@ -101,29 +103,19 @@ The Worker follows Cloudflare's narrow [CORS proxy pattern](https://developers.c
 
 4. Copy the resulting `https://…workers.dev` URL. In the dashboard, open **Settings**, paste the Worker URL, save, then refresh prices.
 
-The Worker does not log request headers or API keys in application code. Avoid enabling request-body/header logging products for this Worker.
+The Worker does not receive portfolio holdings. Avoid enabling request-header logging products for this Worker.
 
 ## Market-data behaviour and limitations
 
-The display label is **Latest available — best effort**. Free official real-time European exchange data is generally unavailable because of exchange licensing.
-
 - Yahoo's chart endpoint is undocumented and unsupported. It may be delayed, rate-limited, changed or unavailable without notice. The parser requires exact provider symbol, trading currency, venue and instrument type, and uses the latest non-null timestamped chart point.
 - Public Yahoo responses are cached briefly at the Worker and the last successful response is cached locally in the browser.
-- UMMEPSA has daily NAV only; no intraday NAV is implied.
-- EODHD is optional. Its [quick-start documentation](https://eodhd.com/financial-apis/quick-start-with-our-financial-data-apis) currently describes a free allowance of 20 calls per day and one year of end-of-day history. Limits and exchange coverage can change; check the provider before relying on it.
-- EODHD values are labelled **Previous close — end-of-day fallback**.
-- Manual values are visibly labelled, have an as-of date, and do not provide daily-change figures.
+- UMMEPSA does not use Yahoo NAV. Its balance is estimated from deposits, dates and effective-dated APY entries stored with the portfolio.
+- Manual ETF values are visibly labelled, have an as-of date, and do not provide daily-change figures.
 - Each quote shows source, provider exchange, market timestamp, fetch timestamp and stale state.
 
-Fallback order is: Yahoo request → cached Yahoo → EODHD if configured → manual price/NAV → unavailable.
+Fallback order for ETFs is: Yahoo request → cached Yahoo → manual price → unavailable.
 
-Historical ranges use 5-minute points for ETF 1D/1W, hourly points for 1M, and daily points for 3M/1Y/MAX. The daily-NAV fund always uses daily points.
-
-## Optional EODHD configuration
-
-Create an EODHD key with the provider, then paste it into dashboard **Settings**. The key is written to its own localStorage record, excluded from JSON exports, and never committed. Do not place it in `.env`, `wrangler.toml`, source code or GitHub Actions variables for this design.
-
-If no EODHD identity is configured for an instrument, that fallback is skipped.
+Historical ranges use 5-minute points for ETF 1D/1W, hourly points for 1M, and daily points for 3M/1Y/MAX. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
 
 ## Import, export and initial holdings
 
@@ -151,7 +143,7 @@ The private template contains the eight instrument identities and no purchase lo
 
 ## Verify provider symbols
 
-This live check reads the private template and validates exact symbol, trading currency, venue, instrument type and latest timestamp against Yahoo:
+This live check reads the private template and validates each ETF's exact symbol, trading currency, venue, instrument type and latest timestamp against Yahoo. UMMEPSA is reported as an APY estimate and skipped:
 
 ```bash
 pnpm verify:market-data outputs/private-portfolio-import-template.json
@@ -163,7 +155,7 @@ To verify through a deployed Worker, add its URL as the second argument:
 pnpm verify:market-data outputs/private-portfolio-import-template.json https://YOUR-WORKER.workers.dev
 ```
 
-Because Yahoo is best-effort, a temporary provider failure should be investigated rather than converted into a placeholder price.
+Because Yahoo is an undocumented source, a temporary provider failure should be investigated rather than converted into a placeholder price.
 
 ## Deploy the dashboard to GitHub Pages
 
@@ -180,7 +172,7 @@ For a custom domain hosted at its root, set `VITE_BASE_PATH=/` in an adjusted wo
 
 Browser storage can be cleared by private-browsing mode, browser cleanup, device loss or site-origin changes. Export JSON after material changes and keep it in an encrypted personal backup. A different Pages domain or repository name is a different browser origin and will not see the old localStorage; import your backup there.
 
-Changing or removing the EODHD key does not change portfolio data. Clearing the portfolio removes portfolio, manual-price and cache records, but retains public settings and the separately stored API key until you remove it in Settings.
+Clearing the portfolio removes portfolio, manual-price and cache records. The Worker URL remains in browser settings so the dashboard can reconnect after a portfolio import.
 
 ## Scope and disclaimer
 

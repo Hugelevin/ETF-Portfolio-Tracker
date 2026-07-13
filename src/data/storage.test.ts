@@ -32,11 +32,64 @@ describe("portfolio storage", () => {
     expect(storage.loadPortfolio()).toEqual(portfolio);
   });
 
+  it("removes the obsolete EODHD credential during migration", () => {
+    const memory = new MemoryStorage();
+    memory.setItem("etf-tracker.api-key.eodhd.v1", "secret");
+
+    createPortfolioStorage(memory);
+
+    expect(memory.getItem("etf-tracker.api-key.eodhd.v1")).toBeNull();
+  });
+
   it("recovers safely from invalid stored JSON", () => {
     const memory = new MemoryStorage();
     memory.setItem("etf-tracker.portfolio.v1", "not-json");
 
     expect(createPortfolioStorage(memory).loadPortfolio()).toEqual(portfolio);
+  });
+
+  it("does not apply Moneybase defaults to the same id at another venue", () => {
+    const storage = createPortfolioStorage(new MemoryStorage());
+    const otherVenue: PortfolioDocument = {
+      schemaVersion: 1,
+      baseCurrency: "EUR",
+      instruments: [{
+        id: "ummepsa-nav-eur",
+        name: "Imported fund",
+        ticker: "OTHER",
+        isin: "IE00BWWCR731",
+        exchange: "Another venue",
+        currency: "EUR",
+        assetType: "FUND",
+      }],
+      lots: [],
+    };
+
+    expect(storage.savePortfolio(otherVenue).instruments[0]?.annualYieldPercentage).toBeUndefined();
+  });
+
+  it("migrates the legacy UMMEPSA venue label to the Moneybase model", () => {
+    const storage = createPortfolioStorage(new MemoryStorage());
+    const legacy: PortfolioDocument = {
+      schemaVersion: 1,
+      baseCurrency: "EUR",
+      instruments: [{
+        id: "ummepsa-nav-eur",
+        name: "UBS cash fund",
+        ticker: "UMMEPSA",
+        isin: "IE00BWWCR731",
+        exchange: "Daily fund NAV",
+        currency: "EUR",
+        assetType: "FUND",
+        yahooSymbol: "0P0001CD0Q.F",
+      }],
+      lots: [],
+    };
+
+    const migrated = storage.savePortfolio(legacy).instruments[0];
+    expect(migrated?.exchange).toBe("Moneybase cash fund");
+    expect(migrated?.annualYieldPercentage).toBe(2.28);
+    expect(migrated?.yahooSymbol).toBeUndefined();
   });
 
   it("exports only portfolio data and validates it on import", () => {

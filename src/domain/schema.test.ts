@@ -67,4 +67,35 @@ describe("parsePortfolioDocument", () => {
     invalid.instruments.push({ ...invalid.instruments[0]!, id: "duplicate-id" });
     expect(() => parsePortfolioDocument(invalid)).toThrow(/Duplicate instrument identity/);
   });
+
+  it("uses the latest effective-dated APY as the canonical current rate", () => {
+    const fund = {
+      ...structuredClone(validPortfolio),
+      instruments: [{
+        ...validPortfolio.instruments[0]!,
+        assetType: "FUND",
+        annualYieldPercentage: 2.28,
+        annualYieldHistory: [
+          { effectiveDate: "2026-01-01", annualYieldPercentage: 2.28 },
+          { effectiveDate: "2026-07-01", annualYieldPercentage: 3 },
+        ],
+      }],
+    };
+
+    expect(parsePortfolioDocument(fund).instruments[0]?.annualYieldPercentage).toBe(3);
+  });
+
+  it("rejects future-dated APY history entries", () => {
+    const fund = {
+      ...structuredClone(validPortfolio),
+      instruments: [{
+        ...validPortfolio.instruments[0]!,
+        assetType: "FUND",
+        annualYieldPercentage: 2.28,
+        annualYieldHistory: [{ effectiveDate: "2999-01-01", annualYieldPercentage: 3 }],
+      }],
+    };
+
+    expect(() => parsePortfolioDocument(fund)).toThrow(/cannot be in the future/);
+  });
 });

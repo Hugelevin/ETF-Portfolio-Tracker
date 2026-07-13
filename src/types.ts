@@ -10,8 +10,14 @@ export interface Instrument {
   micCode?: string;
   currency: CurrencyCode;
   assetType: AssetType;
-  yahooSymbol: string;
-  eodhdSymbol?: string;
+  yahooSymbol?: string;
+  annualYieldPercentage?: number;
+  annualYieldHistory?: AnnualYieldRate[];
+}
+
+export interface AnnualYieldRate {
+  effectiveDate: string;
+  annualYieldPercentage: number;
 }
 
 export interface PurchaseLot {
@@ -23,7 +29,7 @@ export interface PurchaseLot {
   fees: number;
 }
 
-export type MarketSource = "yahoo" | "eodhd" | "manual" | "cache";
+export type MarketSource = "yahoo" | "manual" | "cache";
 
 export interface MarketQuote {
   instrumentId: string;
@@ -86,7 +92,6 @@ export interface PortfolioSummary {
 
 export interface AppSettings {
   proxyUrl: string;
-  eodhdApiKey: string;
 }
 
 export interface ManualPrice {

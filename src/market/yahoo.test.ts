@@ -24,6 +24,7 @@ const payload = {
         fullExchangeName: "XETRA",
         instrumentType: "ETF",
         chartPreviousClose: 79,
+        regularMarketPreviousClose: 79,
       },
       timestamp: [1_783_930_000, 1_783_930_300, 1_783_930_600],
       indicators: {
@@ -48,6 +49,25 @@ describe("parseYahooChart", () => {
     expect(record.history).toHaveLength(2);
   });
 
+  it("uses the previous trading day's timestamped close instead of the range baseline", () => {
+    const changed = structuredClone(payload);
+    changed.chart.result[0]!.meta = {
+      ...changed.chart.result[0]!.meta,
+      chartPreviousClose: 60,
+      regularMarketPreviousClose: 79.2,
+    };
+    changed.chart.result[0]!.timestamp = [
+      Math.floor(Date.parse("2026-07-10T15:30:00Z") / 1_000),
+      Math.floor(Date.parse("2026-07-13T08:00:00Z") / 1_000),
+      Math.floor(Date.parse("2026-07-13T10:00:00Z") / 1_000),
+    ];
+    changed.chart.result[0]!.indicators.quote[0]!.close = [79.2, 79.8, 80];
+
+    const record = parseYahooChart(instrument, changed, "2026-07-13T10:05:00.000Z");
+
+    expect(record.quote.previousClose).toBe(79.2);
+  });
+
   it.each([
     ["symbol", "JEDI.MI", "symbol"],
     ["currency", "USD", "currency"],
@@ -67,24 +87,4 @@ describe("parseYahooChart", () => {
     expect(() => parseYahooChart(instrument, changed)).toThrow("no valid timestamped prices");
   });
 
-  it("accepts a daily mutual-fund NAV while preserving the configured identity", () => {
-    const fund: Instrument = {
-      ...instrument,
-      id: "ummepsa-nav-eur",
-      name: "UBS EUR Money Market Fund",
-      ticker: "UMMEPSA",
-      isin: "IE00BWWCR731",
-      exchange: "Daily fund NAV",
-      assetType: "FUND",
-      yahooSymbol: "0P0001CD0Q.F",
-    };
-    const fundPayload = structuredClone(payload);
-    fundPayload.chart.result[0]!.meta = {
-      ...fundPayload.chart.result[0]!.meta,
-      symbol: fund.yahooSymbol,
-      fullExchangeName: "Frankfurt",
-      instrumentType: "MUTUALFUND",
-    };
-    expect(parseYahooChart(fund, fundPayload).quote.price).toBe(80);
-  });
 });

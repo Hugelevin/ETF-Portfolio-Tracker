@@ -11,7 +11,6 @@ const instrument: Instrument = {
   currency: "EUR",
   assetType: "ETF",
   yahooSymbol: "JEDI.DE",
-  eodhdSymbol: "JEDI.XETRA",
 };
 
 const record = (source: MarketRecord["quote"]["source"]): MarketRecord => ({
@@ -38,13 +37,10 @@ describe("resolveMarketData", () => {
     expect(result.status).toBe("available");
   });
 
-  it("falls back through cache, EODHD, manual and unavailable in that order", async () => {
+  it("falls back through cache, manual and unavailable in that order", async () => {
     const failed = vi.fn().mockRejectedValue(new Error("offline"));
     const cached = await resolveMarketData({ instrument, yahoo: failed, cached: record("cache") });
     expect(cached.record?.quote.source).toBe("cache");
-
-    const eodhd = await resolveMarketData({ instrument, yahoo: failed, eodhd: async () => record("eodhd") });
-    expect(eodhd.record?.quote.source).toBe("eodhd");
 
     const manual: ManualPrice = { instrumentId: instrument.id, price: 77, asOf: "2026-07-12" };
     const manualResult = await resolveMarketData({ instrument, yahoo: failed, manual });

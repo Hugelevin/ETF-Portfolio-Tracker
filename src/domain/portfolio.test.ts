@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPositionValueHistory,
+  calculateChartDomain,
   calculatePeriodPerformance,
   calculatePortfolioSummary,
   calculatePosition,
@@ -28,7 +29,7 @@ const quote: MarketQuote = {
   asOf: "2026-07-13T10:00:00.000Z",
   fetchedAt: "2026-07-13T10:00:10.000Z",
   source: "yahoo",
-  label: "Latest available — best effort",
+  label: "Market data",
   stale: false,
 };
 
@@ -64,6 +65,52 @@ describe("calculatePosition", () => {
     expect(position.profitLossPercentage).toBeNull();
     expect(position.dailyChange).toBeNull();
     expect(position.dailyChangePercentage).toBeNull();
+  });
+
+  it("estimates a money-market balance from deposit cost and configurable APY", () => {
+    const fund: Instrument = {
+      id: "ummepsa-nav-eur",
+      name: "UBS (Irl) Select Money Market Fund — EUR P Acc",
+      ticker: "UMMEPSA",
+      isin: "IE00BWWCR731",
+      exchange: "Moneybase cash fund",
+      currency: "EUR",
+      assetType: "FUND",
+      yahooSymbol: "",
+      annualYieldPercentage: 2.28,
+    };
+    const lots: PurchaseLot[] = [
+      { id: "cash-1", instrumentId: fund.id, shares: 74.0761, pricePerShare: 10.13, purchaseDate: "2025-06-13", fees: 0 },
+    ];
+
+    const position = calculatePosition(fund, lots, null, new Date("2026-07-13T12:00:00Z"));
+
+    expect(position.totalCost).toBeCloseTo(750.39, 2);
+    expect(position.currentValue).toBeCloseTo(769.00, 0);
+    expect(position.profitLoss).toBeCloseTo(18.61, 0);
+    expect(position.dailyChange).toBeGreaterThan(0);
+    expect(position.dailyChangePercentage).toBeCloseTo(2.28 / 365, 2);
+  });
+
+  it("applies later cash-fund APY changes only from their effective dates", () => {
+    const fund: Instrument = {
+      ...instrument,
+      id: "cash",
+      assetType: "FUND",
+      annualYieldPercentage: 3,
+      annualYieldHistory: [
+        { effectiveDate: "2026-01-01", annualYieldPercentage: 2 },
+        { effectiveDate: "2026-07-01", annualYieldPercentage: 3 },
+      ],
+    };
+    const lots: PurchaseLot[] = [
+      { id: "cash-1", instrumentId: fund.id, shares: 100, pricePerShare: 10, purchaseDate: "2026-01-01", fees: 0 },
+    ];
+
+    const position = calculatePosition(fund, lots, null, new Date("2026-07-11T12:00:00Z"));
+    const expected = 1_000 * 1.02 ** (181 / 365) * 1.03 ** (10 / 365);
+
+    expect(position.currentValue).toBeCloseTo(expected, 6);
   });
 });
 
@@ -120,6 +167,17 @@ describe("buildPositionValueHistory", () => {
       { timestamp: "2026-01-03T16:30:00.000Z", investedValue: 702, marketValue: 750 },
       { timestamp: "2026-01-05T16:30:00.000Z", investedValue: 1_103, marketValue: 1_230 },
     ]);
+  });
+
+  it("scales the chart around portfolio values instead of forcing zero into view", () => {
+    const domain = calculateChartDomain([
+      { timestamp: "2026-06-19T16:30:00.000Z", investedValue: 2_874.25, marketValue: 3_178.83 },
+      { timestamp: "2026-06-20T16:30:00.000Z", investedValue: 2_874.25, marketValue: 3_204.5 },
+    ], true);
+
+    expect(domain[0]).toBeGreaterThan(2_500);
+    expect(domain[0]).toBeLessThanOrEqual(2_874.25);
+    expect(domain[1]).toBeGreaterThanOrEqual(3_204.5);
   });
 });
 

@@ -6,7 +6,7 @@ export function StatusBadge({ quote, loading, error }: { quote: MarketQuote | nu
   const badge = quote.source === "manual"
     ? <span className="status manual">Manual {quote.label.toLowerCase().replace("manual ", "")}</span>
     : quote.stale || quote.source === "cache"
-      ? <span className="status stale">Stale · {quote.label}</span>
+      ? <span className="status stale">Previous update</span>
       : <span className="status available">{quote.label}</span>;
   return <span className="status-stack">{badge}{error && <span className="fallback-reason">Fallback reason: {error}</span>}</span>;
 }

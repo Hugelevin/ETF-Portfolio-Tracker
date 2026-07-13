@@ -14,7 +14,6 @@ export const SAMPLE_PORTFOLIO: PortfolioDocument = {
     currency: "EUR",
     assetType: "ETF",
     yahooSymbol: "JEDI.DE",
-    eodhdSymbol: "JEDI.XETRA",
   }],
   lots: [{
     id: "sample-jedi-lot",

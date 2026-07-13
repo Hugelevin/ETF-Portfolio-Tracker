@@ -12,7 +12,7 @@ describe("portfolio dashboard", () => {
   it("shows an honest empty state and zero price coverage", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "Build your private portfolio" })).toBeInTheDocument();
-    expect(screen.getByText("0 of 0 EUR positions priced")).toBeInTheDocument();
+    expect(screen.getByText("0 of 0 EUR positions valued")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: ".metric-card.primary strong" })).toBeInTheDocument();
   });
 
@@ -56,10 +56,60 @@ describe("portfolio dashboard", () => {
   it("labels persisted market data as stale cache on load", () => {
     const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Latest available — best effort", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
 
     render(<App />);
 
-    expect(screen.getByText(/Stale · Cached price/)).toBeInTheDocument();
+    expect(screen.getByText("Previous update")).toBeInTheDocument();
+  });
+
+  it("values the Moneybase cash fund from its configurable APY without Yahoo NAV", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Daily fund NAV", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 74.0761, pricePerShare: 10.13, purchaseDate: "2025-06-13", fees: 0 }] }));
+
+    render(<App />);
+
+    expect(screen.getByText("2.28% APY")).toBeInTheDocument();
+    expect(screen.queryByText("€106.39")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("uses neutral market wording and Yahoo-only settings", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(screen.queryByText(/best[- ]effort/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    expect(within(dialog).queryByLabelText(/EODHD/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/Yahoo Finance/)).toBeInTheDocument();
+  });
+
+  it("lets the user update the cash-fund APY locally", async () => {
+    const user = userEvent.setup();
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase cash fund", currency: "EUR", assetType: "FUND", annualYieldPercentage: 2.28 };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 74.0761, pricePerShare: 10.13, purchaseDate: "2025-06-13", fees: 0 }] }));
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Open UMMEPSA details" }));
+    const dialog = screen.getByRole("dialog", { name: /UMMEPSA/ });
+    const input = within(dialog).getByLabelText("APY (%)");
+    await user.clear(input);
+    await user.type(input, "2.5");
+    await user.click(within(dialog).getByRole("button", { name: "Save APY" }));
+
+    expect(window.localStorage.getItem("etf-tracker.portfolio.v1")).toContain('"annualYieldPercentage":2.5');
+  });
+
+  it("does not present a missing fund APY as a real zero rate", () => {
+    const instrument = { id: "other-fund", name: "Other cash fund", ticker: "CASH", isin: "IE00BWWCR731", exchange: "Another venue", currency: "EUR", assetType: "FUND" };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2026-01-01", fees: 0 }] }));
+
+    render(<App />);
+
+    expect(screen.getByText("APY required")).toBeInTheDocument();
+    expect(screen.queryByText("0% APY")).not.toBeInTheDocument();
   });
 });

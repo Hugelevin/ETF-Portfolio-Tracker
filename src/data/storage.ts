@@ -1,4 +1,5 @@
 import { emptyPortfolio, parsePortfolioDocument } from "../domain/schema";
+import { VERIFIED_INSTRUMENTS } from "../config/instruments";
 import type {
   AppSettings,
   ManualPrice,
@@ -9,12 +10,40 @@ import type {
 const KEYS = {
   portfolio: "etf-tracker.portfolio.v1",
   settings: "etf-tracker.settings.v1",
-  apiKey: "etf-tracker.api-key.eodhd.v1",
   manualPrices: "etf-tracker.manual-prices.v1",
   marketCache: "etf-tracker.market-cache.v1",
 } as const;
+const LEGACY_EODHD_KEY = "etf-tracker.api-key.eodhd.v1";
 
-const defaultSettings: AppSettings = { proxyUrl: "", eodhdApiKey: "" };
+const defaultSettings: AppSettings = { proxyUrl: "" };
+
+function applyInstrumentDefaults(portfolio: PortfolioDocument): PortfolioDocument {
+  const defaults = new Map(VERIFIED_INSTRUMENTS.map((instrument) => [instrument.id, instrument]));
+  return {
+    ...portfolio,
+    instruments: portfolio.instruments.map((instrument) => {
+      const verified = defaults.get(instrument.id);
+      const identityMatches = verified &&
+        instrument.isin === verified.isin &&
+        instrument.currency === verified.currency &&
+        instrument.assetType === verified.assetType;
+      const venueMatches = verified && (
+        instrument.exchange === verified.exchange ||
+        (instrument.assetType === "FUND" && instrument.exchange === "Daily fund NAV") ||
+        Boolean(instrument.micCode && verified.micCode && instrument.micCode === verified.micCode)
+      );
+      if (!verified || !identityMatches || !venueMatches) return instrument;
+      return {
+        ...instrument,
+        exchange: instrument.assetType === "FUND" && instrument.exchange === "Daily fund NAV"
+          ? verified.exchange
+          : instrument.exchange,
+        yahooSymbol: instrument.assetType === "FUND" ? undefined : instrument.yahooSymbol,
+        annualYieldPercentage: instrument.annualYieldPercentage ?? verified.annualYieldPercentage,
+      };
+    }),
+  };
+}
 
 function parseJson<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -26,19 +55,22 @@ function parseJson<T>(value: string | null, fallback: T): T {
 }
 
 export function createPortfolioStorage(storage: Storage) {
+  // The removed provider stored its credential separately; erase it during migration.
+  storage.removeItem(LEGACY_EODHD_KEY);
   return {
     loadPortfolio(): PortfolioDocument {
       const raw = parseJson<unknown>(storage.getItem(KEYS.portfolio), null);
       if (raw === null) return emptyPortfolio();
       try {
-        return parsePortfolioDocument(raw);
+        return applyInstrumentDefaults(parsePortfolioDocument(raw));
       } catch {
         return emptyPortfolio();
       }
     },
-    savePortfolio(portfolio: PortfolioDocument): void {
-      const validated = parsePortfolioDocument(portfolio);
+    savePortfolio(portfolio: PortfolioDocument): PortfolioDocument {
+      const validated = applyInstrumentDefaults(parsePortfolioDocument(portfolio));
       storage.setItem(KEYS.portfolio, JSON.stringify(validated));
+      return validated;
     },
     clearPortfolio(): void {
       storage.removeItem(KEYS.portfolio);
@@ -55,7 +87,6 @@ export function createPortfolioStorage(storage: Storage) {
           typeof publicSettings.proxyUrl === "string"
             ? publicSettings.proxyUrl
             : defaultSettings.proxyUrl,
-        eodhdApiKey: storage.getItem(KEYS.apiKey) ?? "",
       };
     },
     saveSettings(settings: AppSettings): void {
@@ -63,11 +94,6 @@ export function createPortfolioStorage(storage: Storage) {
         KEYS.settings,
         JSON.stringify({ proxyUrl: settings.proxyUrl.trim() }),
       );
-      if (settings.eodhdApiKey) {
-        storage.setItem(KEYS.apiKey, settings.eodhdApiKey.trim());
-      } else {
-        storage.removeItem(KEYS.apiKey);
-      }
     },
     loadManualPrices(): Record<string, ManualPrice> {
       return parseJson(storage.getItem(KEYS.manualPrices), {});

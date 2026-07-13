@@ -12,7 +12,6 @@ interface ResolveOptions {
   instrument: Instrument;
   yahoo: () => Promise<MarketRecord>;
   cached?: MarketRecord;
-  eodhd?: () => Promise<MarketRecord>;
   manual?: ManualPrice;
   fetchedAt?: string;
 }
@@ -47,22 +46,12 @@ export async function resolveMarketData(options: ResolveOptions): Promise<Market
           ...options.cached.quote,
           source: "cache",
           stale: true,
-          label: "Cached price — last successful update",
+          label: "Previous update",
         },
       },
       status: "cached",
       errors,
     };
-  }
-
-  if (options.eodhd) {
-    try {
-      const eodhd = await options.eodhd();
-      if (!isValidMarketRecord(eodhd, options.instrument)) throw new Error("EODHD returned invalid data");
-      return { record: eodhd, status: "available", errors };
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : "EODHD request failed");
-    }
   }
 
   const manual = options.manual;

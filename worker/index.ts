@@ -1,14 +1,10 @@
-import { isAllowedEodhdSymbol, isValidFromDate } from "./validation";
-
 export interface Env {
   ALLOWED_ORIGINS: string;
   ALLOWED_SYMBOLS?: string;
-  ALLOWED_EODHD_SYMBOLS?: string;
 }
 
 const DEFAULT_SYMBOLS = [
   "ANAU-ETFP.MI",
-  "0P0001CD0Q.F",
   "SPYY.DE",
   "VVSM.DE",
   "JEDI.DE",
@@ -28,7 +24,7 @@ function corsHeaders(request: Request, env: Env): Headers {
   const headers = new Headers({
     "Vary": "Origin",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-EODHD-Key",
+    "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   });
   if (allowed.has(origin) || (origin.startsWith("http://localhost:") && allowed.has("http://localhost:*"))) {
@@ -83,7 +79,7 @@ async function yahooChart(request: Request, env: Env, ctx: ExecutionContext, url
   const headers = corsHeaders(request, env);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", upstreamResponse.ok ? "public, max-age=60" : "no-store");
-  headers.set("X-Market-Source", "Yahoo Finance chart (best effort)");
+  headers.set("X-Market-Source", "Yahoo Finance chart");
   const response = new Response(body, { status: upstreamResponse.status, headers });
   if (upstreamResponse.ok) ctx.waitUntil(edgeCache.put(cacheKey, response.clone()));
   return response;
@@ -106,30 +102,6 @@ async function yahooSearch(request: Request, env: Env, url: URL) {
   });
 }
 
-async function eodhd(request: Request, env: Env, url: URL) {
-  const symbol = url.searchParams.get("symbol") ?? "";
-  const apiKey = request.headers.get("X-EODHD-Key") ?? "";
-  if (!/^[A-Z0-9.-]{2,40}$/i.test(symbol) || !apiKey || apiKey.length > 200) {
-    return json(request, env, { error: "A valid EODHD symbol and browser key are required" }, 400);
-  }
-  if (!isAllowedEodhdSymbol(symbol, parseCsv(env.ALLOWED_EODHD_SYMBOLS))) return json(request, env, { error: "Unsupported EODHD symbol" }, 400);
-  const upstream = new URL(`https://eodhd.com/api/eod/${encodeURIComponent(symbol)}`);
-  upstream.searchParams.set("api_token", apiKey);
-  upstream.searchParams.set("fmt", "json");
-  upstream.searchParams.set("period", "d");
-  const from = url.searchParams.get("from");
-  if (from && !isValidFromDate(from)) return json(request, env, { error: "Invalid EODHD start date" }, 400);
-  if (from) upstream.searchParams.set("from", from);
-  const response = await fetch(upstream, { headers: { "Accept": "application/json" } });
-  const headers = corsHeaders(request, env);
-  headers.set("Content-Type", "application/json; charset=utf-8");
-  headers.set("Cache-Control", "no-store");
-  return new Response(await response.text(), {
-    status: response.status,
-    headers,
-  });
-}
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!originAllowed(request, env)) return json(request, env, { error: "Origin is not allowed" }, 403);
@@ -141,7 +113,6 @@ export default {
       if (url.pathname === "/health") return json(request, env, { ok: true });
       if (url.pathname === "/yahoo/chart") return yahooChart(request, env, ctx, url);
       if (url.pathname === "/yahoo/search") return yahooSearch(request, env, url);
-      if (url.pathname === "/eodhd/eod") return eodhd(request, env, url);
       return json(request, env, { error: "Not found" }, 404);
     } catch {
       return json(request, env, { error: "Market-data upstream request failed" }, 502);

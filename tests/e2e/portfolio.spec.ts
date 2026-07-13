@@ -17,9 +17,9 @@ test.beforeEach(async ({ page }) => {
   }, sample);
 });
 
-test("shows priced summary, holding and accessible detail", async ({ page }) => {
+test("shows valued summary, holding and accessible detail", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("1 of 1 EUR positions priced")).toBeVisible();
+  await expect(page.getByText("1 of 1 EUR positions valued")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Holdings" })).toBeVisible();
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
@@ -41,5 +41,5 @@ test("shows an explicit rate-limit error without inventing a price", async ({ pa
   await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, json: { error: "daily request allowance reached" } }));
   await page.goto("/");
   await expect(page.getByText(/Price unavailable — Rate limit reached/)).toBeVisible();
-  await expect(page.getByText("0 of 1 EUR positions priced")).toBeVisible();
+  await expect(page.getByText("0 of 1 EUR positions valued")).toBeVisible();
 });

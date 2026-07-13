@@ -1,5 +1,4 @@
 import type { ChartRange, Instrument, MarketRecord } from "../types";
-import { parseEodhdHistory } from "./eodhd";
 import { parseYahooChart } from "./yahoo";
 
 const RANGE_QUERY: Record<ChartRange, { range: string; interval: string }> = {
@@ -39,29 +38,13 @@ export async function fetchYahooRecord(
   range: ChartRange,
   proxyUrl: string,
 ): Promise<MarketRecord> {
+  if (!instrument.yahooSymbol) throw new Error("No Yahoo Finance symbol is configured for this instrument");
   const url = endpoint(proxyUrl, "/yahoo/chart");
-  const query = instrument.assetType === "FUND"
-    ? { ...RANGE_QUERY[range], interval: "1d" }
-    : RANGE_QUERY[range];
+  const query = RANGE_QUERY[range];
   url.searchParams.set("symbol", instrument.yahooSymbol);
   url.searchParams.set("range", query.range);
   url.searchParams.set("interval", query.interval);
   return parseYahooChart(instrument, await fetchJson(url));
-}
-
-export async function fetchEodhdRecord(
-  instrument: Instrument,
-  proxyUrl: string,
-  apiKey: string,
-): Promise<MarketRecord> {
-  if (!instrument.eodhdSymbol) throw new Error("No EODHD identity is configured for this instrument");
-  const url = endpoint(proxyUrl, "/eodhd/eod");
-  url.searchParams.set("symbol", instrument.eodhdSymbol);
-  const from = new Date();
-  from.setUTCFullYear(from.getUTCFullYear() - 1);
-  url.searchParams.set("from", from.toISOString().slice(0, 10));
-  const payload = await fetchJson(url, { headers: { "X-EODHD-Key": apiKey } });
-  return parseEodhdHistory(instrument, payload);
 }
 
 export interface SearchResult {

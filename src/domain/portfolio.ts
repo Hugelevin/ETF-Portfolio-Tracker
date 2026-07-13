@@ -11,6 +11,7 @@ export function calculatePosition(
   instrument: Instrument,
   lots: PurchaseLot[],
   quote: MarketQuote | null,
+  valuationDate = new Date(),
 ): PositionMetrics {
   const totalShares = lots.reduce((sum, lot) => sum + lot.shares, 0);
   const purchaseCostExcludingFees = lots.reduce(
@@ -23,18 +24,29 @@ export function calculatePosition(
   );
   const averagePurchasePrice =
     totalShares > 0 ? purchaseCostExcludingFees / totalShares : 0;
-  const currentValue = quote ? totalShares * quote.price : null;
+  const yieldEstimate = instrument.assetType === "FUND" &&
+    instrument.annualYieldPercentage !== undefined
+    ? estimateYieldBalance(
+        lots,
+        instrument.annualYieldPercentage,
+        instrument.annualYieldHistory ?? [],
+        valuationDate,
+      )
+    : null;
+  const currentValue = yieldEstimate?.currentValue ?? (quote ? totalShares * quote.price : null);
   const profitLoss = currentValue === null ? null : currentValue - totalCost;
   const profitLossPercentage =
     profitLoss === null || totalCost <= 0 ? null : (profitLoss / totalCost) * 100;
-  const dailyChange =
+  const dailyChange = yieldEstimate?.dailyChange ?? (
     quote?.previousClose == null
       ? null
-      : totalShares * (quote.price - quote.previousClose);
-  const dailyChangePercentage =
+      : totalShares * (quote.price - quote.previousClose)
+  );
+  const dailyChangePercentage = yieldEstimate?.dailyChangePercentage ?? (
     quote?.previousClose == null || quote.previousClose <= 0
       ? null
-      : ((quote.price - quote.previousClose) / quote.previousClose) * 100;
+      : ((quote.price - quote.previousClose) / quote.previousClose) * 100
+  );
 
   return {
     instrument,
@@ -51,6 +63,53 @@ export function calculatePosition(
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+function estimateYieldBalance(
+  lots: PurchaseLot[],
+  annualYieldPercentage: number,
+  annualYieldHistory: NonNullable<Instrument["annualYieldHistory"]>,
+  valuationDate: Date,
+): { currentValue: number; dailyChange: number; dailyChangePercentage: number } {
+  const valuationDay = Date.UTC(
+    valuationDate.getFullYear(),
+    valuationDate.getMonth(),
+    valuationDate.getDate(),
+  );
+  const rates = [...annualYieldHistory]
+    .map((rate) => ({
+      day: Date.parse(`${rate.effectiveDate}T00:00:00.000Z`),
+      rate: rate.annualYieldPercentage,
+    }))
+    .sort((left, right) => left.day - right.day);
+  const valueAtDay = (targetDay: number) => lots.reduce((sum, lot) => {
+    const purchaseDay = Date.parse(`${lot.purchaseDate}T00:00:00.000Z`);
+    if (targetDay < purchaseDay) return sum;
+
+    let value = lot.shares * lot.pricePerShare;
+    let cursor = purchaseDay;
+    let activeRate = rates.filter((rate) => rate.day <= purchaseDay).at(-1)?.rate ??
+      rates[0]?.rate ?? annualYieldPercentage;
+    for (const rate of rates.filter((item) => item.day > purchaseDay && item.day <= targetDay)) {
+      value *= (1 + activeRate / 100) ** ((rate.day - cursor) / DAY_MS / 365);
+      cursor = rate.day;
+      activeRate = rate.rate;
+    }
+    value *= (1 + activeRate / 100) ** ((targetDay - cursor) / DAY_MS / 365);
+    return sum + value;
+  }, 0);
+  const valueAtOffset = (dayOffset: number) => valueAtDay(valuationDay - dayOffset * DAY_MS);
+  const currentValue = valueAtOffset(0);
+  const previousValue = valueAtOffset(1);
+  const dailyChange = currentValue - previousValue;
+
+  return {
+    currentValue,
+    dailyChange,
+    dailyChangePercentage: previousValue > 0 ? (dailyChange / previousValue) * 100 : 0,
+  };
+}
+
 export interface PositionValuePoint {
   timestamp: string;
   investedValue: number;
@@ -61,6 +120,22 @@ export interface PeriodPerformance {
   value: number;
   percentage: number;
   referenceTimestamp: string;
+}
+
+export function calculateChartDomain(
+  points: PositionValuePoint[],
+  includeInvestedValue: boolean,
+): [number, number] {
+  const values = points.flatMap((point) => includeInvestedValue
+    ? [point.marketValue, point.investedValue]
+    : [point.marketValue]);
+  if (!values.length) return [0, 1];
+
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const span = maximum - minimum;
+  const padding = span > 0 ? span * 0.1 : Math.max(Math.abs(maximum) * 0.05, 1);
+  return [Math.max(0, minimum - padding), maximum + padding];
 }
 
 export function calculatePeriodPerformance(

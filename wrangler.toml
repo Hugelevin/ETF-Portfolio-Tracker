@@ -3,6 +3,6 @@ main = "worker/index.ts"
 compatibility_date = "2026-07-01"
 
 [vars]
-ALLOWED_ORIGINS = "https://hugelevin.github.io/ETF-Portfolio-Tracker/"
+ALLOWED_ORIGINS = "https://hugelevin.github.io,http://localhost:*"
 ALLOWED_SYMBOLS = "ANAU-ETFP.MI,0P0001CD0Q.F,SPYY.DE,VVSM.DE,JEDI.DE,VWCE.DE,QUTM.DE,VUAA.DE"
 ALLOWED_EODHD_SYMBOLS = "ANAU.MI,SPYY.XETRA,VVSM.XETRA,JEDI.XETRA,VWCE.XETRA,QUTM.XETRA,VUAA.XETRA"

@@ -23,23 +23,23 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Holdings" })).toBeVisible();
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
-  await expect(page.getByText("View chart data as a table")).toBeVisible();
+  await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
 });
 
 test("purchase form is keyboard reachable", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Add purchase" }).focus();
+  await page.getByRole("button", { name: "Add Purchase" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Add a purchase lot" })).toBeVisible();
-  await expect(page.getByLabel("Find an instrument")).toBeFocused();
+  await expect(page.getByRole("dialog", { name: "Add a Purchase Lot" })).toBeVisible();
+  await expect(page.getByLabel("Find an Instrument")).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Add a purchase lot" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Add a Purchase Lot" })).toBeHidden();
 });
 
 test("shows an explicit rate-limit error without inventing a price", async ({ page }) => {
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, json: { error: "daily request allowance reached" } }));
   await page.goto("/");
-  await expect(page.getByText(/Price unavailable — Rate limit reached/)).toBeVisible();
+  await expect(page.getByText(/Market Data Unavailable — Rate limit reached/)).toBeVisible();
   await expect(page.getByText("0 of 1 EUR positions valued")).toBeVisible();
 });

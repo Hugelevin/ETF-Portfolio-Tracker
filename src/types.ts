@@ -58,13 +58,18 @@ export interface PositionMetrics {
   instrument: Instrument;
   lots: PurchaseLot[];
   totalShares: number;
+  purchaseCostExcludingFees: number;
+  totalFees: number;
   totalCost: number;
   averagePurchasePrice: number;
   currentValue: number | null;
+  marketReturn: number | null;
+  marketReturnPercentage: number | null;
   profitLoss: number | null;
   profitLossPercentage: number | null;
   dailyChange: number | null;
   dailyChangePercentage: number | null;
+  costBasisWarning: string | null;
   quote: MarketQuote | null;
 }
 
@@ -78,6 +83,8 @@ export interface PortfolioDocument {
 export interface PortfolioSummary {
   totalInvested: number;
   currentValue: number;
+  marketReturn: number;
+  marketReturnPercentage: number | null;
   profitLoss: number;
   profitLossPercentage: number | null;
   dailyChange: number | null;

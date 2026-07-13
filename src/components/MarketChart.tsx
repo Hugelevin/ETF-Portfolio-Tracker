@@ -17,11 +17,11 @@ export function MarketChart({ history, lots, compare, currency }: { history: Mar
           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={30} />
           <YAxis domain={domain} tickFormatter={(value: number) => new Intl.NumberFormat("en-GB", { notation: "compact" }).format(value)} tickLine={false} axisLine={false} width={52} />
           <Tooltip formatter={(value) => formatMoney(typeof value === "number" ? value : Number(value), currency)} labelStyle={{ color: "#162824" }} />
-          <Area type="monotone" dataKey="marketValue" name="Market value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" />
-          {compare && <Line type="stepAfter" dataKey="investedValue" name="Invested cost" stroke="#d18b3f" strokeWidth={2} dot={false} />}
+          <Area type="monotone" dataKey="marketValue" name="Market Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" />
+          {compare && <Line type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={false} />}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
-    <details className="data-alternative"><summary>View chart data as a table</summary><div className="compact-table"><table><thead><tr><th>Date</th><th>Market value</th><th>Invested cost</th></tr></thead><tbody>{data.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.marketValue, currency)}</td><td>{formatMoney(point.investedValue, currency)}</td></tr>)}</tbody></table></div></details>
+    <details className="data-alternative"><summary>View Chart Data as a Table</summary><div className="compact-table"><table><thead><tr><th>Date</th><th>Market Value</th><th>Invested Cost</th></tr></thead><tbody>{data.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.marketValue, currency)}</td><td>{formatMoney(point.investedValue, currency)}</td></tr>)}</tbody></table></div></details>
   </>;
 }

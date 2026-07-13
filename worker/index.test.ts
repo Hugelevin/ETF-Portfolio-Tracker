@@ -1,11 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
-import worker, { type Env } from "./index";
+import worker from "./index";
 
 const env: Env = {
-  ALLOWED_ORIGINS: "https://hugelevin.github.io",
-  ALLOWED_SYMBOLS: "ANAU-ETFP.MI,SPYY.DE",
+  ALLOWED_ORIGINS: "https://hugelevin.github.io,http://localhost:*",
+  ALLOWED_SYMBOLS: "ANAU-ETFP.MI,0P0001CD0Q.F,SPYY.DE,VVSM.DE,JEDI.DE,VWCE.DE,QUTM.DE,VUAA.DE",
 };
-const context = { waitUntil: vi.fn() } as unknown as ExecutionContext;
+class TestSpan {
+  get isTraced() { return false; }
+  setAttribute() {}
+  end() {}
+}
+
+const context: ExecutionContext = {
+  waitUntil: vi.fn(),
+  passThroughOnException: vi.fn(),
+  props: undefined,
+  tracing: {
+    enterSpan: vi.fn(),
+    startActiveSpan: vi.fn(),
+    Span: TestSpan,
+  },
+};
 
 describe("market-data Worker", () => {
   it("reports health with CORS for the configured Pages origin", async () => {

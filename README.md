@@ -9,9 +9,9 @@ The application prioritises honest data states over apparent completeness: missi
 - **React + TypeScript + Vite**: static dashboard deployed to GitHub Pages.
 - **Browser localStorage**: separate versioned records for portfolio, settings, manual prices and market cache.
 - **Cloudflare Worker**: a stateless, narrow CORS adapter. It accepts only validated market symbols and never receives shares, purchase prices, dates or fees.
-- **Yahoo Finance chart feed**: free, undocumented current-session and historical ETF data.
-- **Moneybase cash-fund estimate**: deposit cost accrues daily using a user-editable APY.
-- **Manual ETF price**: final fallback, always visibly labelled.
+- **Yahoo Finance chart feed**: free, undocumented current-session ETF prices, historical ETF data and daily fund NAV data.
+- **Moneybase cash-fund model**: published NAV is preferred; a user-editable APY supplies context and a fallback estimate.
+- **Manual price or NAV**: final fallback, always visibly labelled.
 
 No analytics, cookies, accounts, external databases or portfolio server are used.
 
@@ -22,7 +22,7 @@ Positions are identified by ISIN, venue and trading currency—not ticker alone.
 | Holding | Type | Venue | Trading currency | Yahoo symbol |
 |---|---|---|---|---|
 | ANAU · IE000QDFFK00 | ETF | Milan | EUR | `ANAU-ETFP.MI` |
-| UMMEPSA · IE00BWWCR731 | Money-market fund, P Acc | Moneybase cash fund | EUR | APY estimate |
+| UMMEPSA · IE00BWWCR731 | Money-market fund, P Acc | Moneybase Cash Fund | EUR | `0P0001CD0Q.F` |
 | SPYY · IE00B44Z5B48 | ETF | Xetra | EUR | `SPYY.DE` |
 | VVSM · IE00BMC38736 | ETF | Xetra | EUR | `VVSM.DE` |
 | JEDI · IE000YU9K6K2 | ETF | Xetra | EUR | `JEDI.DE` |
@@ -30,11 +30,11 @@ Positions are identified by ISIN, venue and trading currency—not ticker alone.
 | QUTM · IE0007Y8Y157 | ETF | Xetra | EUR | `QUTM.DE` |
 | VUAA · IE00BFMXXD54 | ETF | Xetra | EUR | `VUAA.DE` |
 
-UMMEPSA is deliberately treated as a Moneybase cash-fund balance, not as exchange-traded UBS NAV units. Its estimated balance compounds each recorded deposit at the configured APY. The first stored rate estimates the earlier period; when you update the APY in the holding detail view, the new rate is saved with its effective date so later changes do not rewrite earlier estimated earnings. For all instruments, EUR is the **trading currency** of this configured venue; it need not be the fund's base currency.
+UMMEPSA is shown as the accumulating Moneybase cash fund. The tracker values its units using the latest published daily NAV from the configured Yahoo identity. The current Moneybase APY is stored locally as context and as an estimate only when published NAV data is unavailable. For all instruments, EUR is the **trading currency** of the configured venue; it need not be the fund's base currency.
 
 ## Do fees need to be tracked?
 
-No. Fees default to €0. Enter broker commission or transaction charges only if you want the profit/loss cost basis to match your broker exactly. Do not enter TER or ongoing fund charges: those are already reflected in the ETF price or fund NAV.
+No. Broker fees default to €0. When entered, each fee is treated as a one-off amount paid on top of that purchase. It increases total cost but does not reduce the number of shares. The dashboard shows both **Market Return** before broker fees, which is comparable with Moneybase's main profit/loss figure, and **Net Return** after broker fees.
 
 Calculations are:
 
@@ -42,11 +42,13 @@ Calculations are:
 totalCost = Σ(shares × purchasePrice + fees)
 averagePurchasePrice = Σ(shares × purchasePrice) ÷ totalShares
 currentValue = totalShares × latestPrice
-profitLoss = currentValue − totalCost
-profitLossPercentage = profitLoss ÷ totalCost × 100
+marketReturn = currentValue − Σ(shares × purchasePrice)
+marketReturnPercentage = marketReturn ÷ Σ(shares × purchasePrice) × 100
+netReturn = currentValue − totalCost
+netReturnPercentage = netReturn ÷ totalCost × 100
 ```
 
-For UMMEPSA, each deposit's cost excluding fees is compounded daily using the configured APY instead of multiplying Moneybase units by the official UBS NAV. The displayed balance and return are estimates.
+For UMMEPSA, published NAV is authoritative when available. If NAV is unavailable, each lot's cost excluding fees is compounded daily using the effective-dated APY and the result is visibly labelled as an estimate.
 
 Missing prices are never replaced with zero. Non-EUR positions may be imported, but are excluded from combined EUR totals and reported in coverage.
 
@@ -72,6 +74,13 @@ Quality checks:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
+```
+
+Playwright normally downloads its own Chromium build. On Windows, you can instead run the browser tests with an existing Chrome installation:
+
+```powershell
+$env:PLAYWRIGHT_EXECUTABLE_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 pnpm test:e2e
 ```
 
@@ -107,22 +116,24 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 
 ## Market-data behaviour and limitations
 
-- Yahoo's chart endpoint is undocumented and unsupported. It may be delayed, rate-limited, changed or unavailable without notice. The parser requires exact provider symbol, trading currency, venue and instrument type, and uses the latest non-null timestamped chart point.
+- Yahoo's chart endpoint is undocumented and unsupported. It may be delayed, rate-limited, changed or unavailable without notice. ETF responses must match the exact provider symbol, trading currency, exchange venue and instrument type. Fund NAV responses must match the exact provider symbol, trading currency and fund type; the provider venue is shown separately because Moneybase is the descriptive holding venue rather than Yahoo's NAV host venue. The parser uses the latest non-null timestamped chart point.
 - Public Yahoo responses are cached briefly at the Worker and the last successful response is cached locally in the browser.
-- UMMEPSA does not use Yahoo NAV. Its balance is estimated from deposits, dates and effective-dated APY entries stored with the portfolio.
-- Manual ETF values are visibly labelled, have an as-of date, and do not provide daily-change figures.
+- UMMEPSA uses daily Yahoo fund NAV data. Its locally stored, effective-dated APY is used only as a fallback estimate when NAV is unavailable.
+- Manual ETF prices and fund NAV values are visibly labelled, have an as-of date, and do not provide daily-change figures.
 - Each quote shows source, provider exchange, market timestamp, fetch timestamp and stale state.
 
-Fallback order for ETFs is: Yahoo request → cached Yahoo → manual price → unavailable.
+Fallback order is: Yahoo request → cached Yahoo → manual price/NAV → APY estimate for UMMEPSA only → unavailable.
 
-Historical ranges use 5-minute points for ETF 1D/1W, hourly points for 1M, and daily points for 3M/1Y/MAX. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
+Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
 
-## Import, export and initial holdings
+## Import, Export and Initial Holdings
 
-- **Add purchase** records individual lots and combines them into one position.
+- **Add Purchase** records individual lots and combines them into one position.
 - **Export JSON** includes only the versioned portfolio document.
 - **Import JSON** validates the entire file and shows a replacement preview before changing local data.
 - Deleting a lot, deleting a holding and clearing the portfolio all require confirmation.
+
+If UMMEPSA was previously recorded using an estimated cash-balance cost rather than a per-unit NAV purchase price, import the corrected portfolio JSON before using Yahoo NAV. The dashboard blocks an implausible fund return and displays **Review Cost Basis** instead of silently multiplying incompatible values.
 
 For a public, non-personal starting configuration, edit `src/config/samplePortfolio.ts` before building. Never commit your real lots.
 
@@ -143,7 +154,7 @@ The private template contains the eight instrument identities and no purchase lo
 
 ## Verify provider symbols
 
-This live check reads the private template and validates each ETF's exact symbol, trading currency, venue, instrument type and latest timestamp against Yahoo. UMMEPSA is reported as an APY estimate and skipped:
+This live check reads the private template and validates every configured Yahoo identity, including UMMEPSA's daily fund NAV symbol, trading currency, venue or fund type, and latest timestamp:
 
 ```bash
 pnpm verify:market-data outputs/private-portfolio-import-template.json

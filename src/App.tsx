@@ -19,7 +19,7 @@ const browserStorage = createPortfolioStorage(window.localStorage);
 const cacheKey = (instrumentId: string, range: ChartRange) => `${instrumentId}:${range}`;
 
 function asStaleCache(value: MarketRecord, instrument: Instrument | undefined): MarketRecord | null {
-  if (!instrument || instrument.assetType === "FUND" || !isValidMarketRecord(value, instrument)) return null;
+  if (!instrument || !isValidMarketRecord(value, instrument)) return null;
   return { ...value, quote: { ...value.quote, source: "cache", stale: true, label: "Cached price — last successful update" } };
 }
 
@@ -48,8 +48,7 @@ export default function App() {
   const positions = useMemo(() => portfolio.instruments.flatMap((instrument): PositionMetrics[] => {
     const lots = portfolio.lots.filter((lot) => lot.instrumentId === instrument.id);
     if (!lots.length) return [];
-    const quote = instrument.assetType === "FUND" ? null : records[instrument.id]?.quote ?? null;
-    return [calculatePosition(instrument, lots, quote)];
+    return [calculatePosition(instrument, lots, records[instrument.id]?.quote ?? null)];
   }), [portfolio, records]);
   const summary = useMemo(() => calculatePortfolioSummary(positions, portfolio.baseCurrency), [positions, portfolio.baseCurrency]);
   const selected = positions.find((position) => position.instrument.id === selectedId) ?? null;
@@ -57,7 +56,6 @@ export default function App() {
   function persist(next: PortfolioDocument) { setPortfolio(browserStorage.savePortfolio(next)); }
 
   async function refreshOne(instrument: Instrument, range: ChartRange = "1M") {
-    if (instrument.assetType === "FUND") return;
     setLoading((current) => new Set(current).add(instrument.id));
     setErrors((current) => ({ ...current, [instrument.id]: "" }));
     const resolution = await resolveMarketData({
@@ -90,7 +88,7 @@ export default function App() {
 
   async function refreshAll() {
     if (!positions.length) return;
-    await Promise.all(positions.filter((position) => position.instrument.assetType === "ETF").map((position) => refreshOne(position.instrument)));
+    await Promise.all(positions.map((position) => refreshOne(position.instrument)));
     setNotice("Market data refresh finished.");
   }
 
@@ -169,14 +167,14 @@ export default function App() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#main">Skip to portfolio</a>
-    <header className="topbar"><a className="brand" href="./" aria-label="Portfolio home"><span>V</span><div><strong>Valeo</strong><small>Personal portfolio</small></div></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> Settings</button><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add purchase</button></nav></header>
+    <header className="topbar"><a className="brand" href="./" aria-label="Portfolio home"><span>V</span><div><strong>Valeo</strong><small>Personal Portfolio</small></div></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> Settings</button><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add Purchase</button></nav></header>
     {!navigator.onLine && <div className="global-banner" role="status">You are offline. Cached or manual prices may still be available.</div>}
     {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}>×</button></div>}
     <main id="main">
-      <div className="page-heading"><div><p className="eyebrow">Private · local to this browser</p><h1>Portfolio dashboard</h1><p>Market data with source and update time shown.</p></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh prices"}</button></div>
+      <div className="page-heading"><div><p className="eyebrow">Private · Local to This Browser</p><h1>Portfolio Dashboard</h1><p>Market data with source and update time shown.</p></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
       <SummaryCards summary={summary} positions={positions} />
-      {!positions.length ? <section className="empty-state"><div className="empty-icon"><ShieldCheck /></div><p className="eyebrow">Nothing leaves your device</p><h2>Build your private portfolio</h2><p>Add a purchase or import the private JSON template. Purchase details stay in localStorage and never go to market providers.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add first purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load public sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
-      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local data</p><h2 id="data-title">Import, export and recovery</h2><p>Exports contain instruments and purchase lots only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear portfolio</button></div></section>
+      {!positions.length ? <section className="empty-state"><div className="empty-icon"><ShieldCheck /></div><p className="eyebrow">Nothing Leaves Your Device</p><h2>Build Your Private Portfolio</h2><p>Add a purchase or import the private JSON template. Purchase details stay in localStorage and never go to market providers.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
+      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local Data</p><h2 id="data-title">Import, Export and Recovery</h2><p>Exports contain instruments and purchase lots only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear Portfolio</button></div></section>
     </main>
     <footer className="site-footer"><p><ShieldCheck /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} onSave={addLot} />}

@@ -11,7 +11,7 @@ describe("portfolio dashboard", () => {
 
   it("shows an honest empty state and zero price coverage", () => {
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Build your private portfolio" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Build Your Private Portfolio" })).toBeInTheDocument();
     expect(screen.getByText("0 of 0 EUR positions valued")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: ".metric-card.primary strong" })).toBeInTheDocument();
   });
@@ -19,12 +19,14 @@ describe("portfolio dashboard", () => {
   it("records a verified purchase with fees defaulting to zero", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Add first purchase" }));
-    const dialog = screen.getByRole("dialog", { name: "Add a purchase lot" });
-    await user.type(within(dialog).getByLabelText("Shares / units"), "25");
-    await user.type(within(dialog).getByLabelText("Purchase price per share / unit"), "76.8");
-    fireEvent.change(within(dialog).getByLabelText("Purchase date"), { target: { value: "2026-01-02" } });
-    await user.click(within(dialog).getByRole("button", { name: "Add purchase" }));
+    await user.click(screen.getByRole("button", { name: "Add First Purchase" }));
+    const dialog = screen.getByRole("dialog", { name: "Add a Purchase Lot" });
+    await user.type(within(dialog).getByLabelText("Shares"), "25");
+    await user.type(within(dialog).getByLabelText("Purchase Price per Share"), "76.8");
+    fireEvent.change(within(dialog).getByLabelText("Purchase Date"), { target: { value: "2026-01-02" } });
+    expect(within(dialog).getByText("€", { selector: ".currency-input > span" })).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Commission only/i)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Add Purchase" }));
     expect(screen.getByRole("heading", { name: "Holdings" })).toBeInTheDocument();
     expect(screen.getByText("ANAU", { selector: "td strong" })).toBeInTheDocument();
     expect(window.localStorage.getItem("etf-tracker.portfolio.v1")).toContain('"fees":0');
@@ -34,8 +36,8 @@ describe("portfolio dashboard", () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Load public sample" }));
-    await user.click(screen.getByRole("button", { name: "Clear portfolio" }));
+    await user.click(screen.getByRole("button", { name: "Load Public Sample" }));
+    await user.click(screen.getByRole("button", { name: "Clear Portfolio" }));
     expect(confirm).toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "Holdings" })).toBeInTheDocument();
   });
@@ -48,9 +50,9 @@ describe("portfolio dashboard", () => {
     const file = new File([json], "portfolio.json", { type: "application/json" });
     Object.defineProperty(file, "text", { value: async () => json });
     await user.upload(input, file);
-    const preview = await screen.findByRole("alertdialog", { name: "Import this portfolio?" });
+    const preview = await screen.findByRole("alertdialog", { name: "Import This Portfolio?" });
     expect(within(preview).getByText(/0 instruments/)).toBeInTheDocument();
-    expect(within(preview).getByRole("button", { name: "Replace portfolio" })).toBeInTheDocument();
+    expect(within(preview).getByRole("button", { name: "Replace Portfolio" })).toBeInTheDocument();
   });
 
   it("labels persisted market data as stale cache on load", () => {
@@ -60,20 +62,32 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getByText("Previous update")).toBeInTheDocument();
+    expect(screen.getByText("Previous Update")).toBeInTheDocument();
   });
 
-  it("values the Moneybase cash fund from its configurable APY without Yahoo NAV", () => {
+  it("uses the configured APY as a fallback when fund NAV is unavailable", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
     const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Daily fund NAV", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" };
-    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 74.0761, pricePerShare: 10.13, purchaseDate: "2025-06-13", fees: 0 }] }));
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
 
     render(<App />);
 
     expect(screen.getByText("2.28% APY")).toBeInTheDocument();
-    expect(screen.queryByText("€106.39")).not.toBeInTheDocument();
+    expect(screen.queryByText("€100.20")).not.toBeInTheDocument();
     vi.useRealTimers();
+  });
+
+  it("uses cached fund NAV and shows Moneybase-style market return before fees", () => {
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
+
+    render(<App />);
+
+    expect(screen.getByText("€100.20")).toBeInTheDocument();
+    expect(screen.getAllByText("€2.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("Current APY 2.28%")).toBeInTheDocument();
   });
 
   it("uses neutral market wording and Yahoo-only settings", async () => {
@@ -89,8 +103,8 @@ describe("portfolio dashboard", () => {
 
   it("lets the user update the cash-fund APY locally", async () => {
     const user = userEvent.setup();
-    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase cash fund", currency: "EUR", assetType: "FUND", annualYieldPercentage: 2.28 };
-    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 74.0761, pricePerShare: 10.13, purchaseDate: "2025-06-13", fees: 0 }] }));
+    const instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund — EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", annualYieldPercentage: 2.28 };
+    window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Open UMMEPSA details" }));
@@ -109,7 +123,7 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getByText("APY required")).toBeInTheDocument();
+    expect(screen.getByText("Market Data Unavailable")).toBeInTheDocument();
     expect(screen.queryByText("0% APY")).not.toBeInTheDocument();
   });
 });

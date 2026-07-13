@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { VERIFIED_INSTRUMENTS } from "../config/instruments";
+import { toLocalIsoDate } from "../format";
 import type { Instrument, PurchaseLot } from "../types";
+import { InstrumentLogo } from "./InstrumentLogo";
 import { useDialogKeyboard } from "./useDialogKeyboard";
 
 export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSave: (instrument: Instrument, lot: PurchaseLot) => void }) {
@@ -32,14 +34,14 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={keyboard.dialogRef} onKeyDown={keyboard.onKeyDown} className="modal purchase-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-title">
-      <header><div><p className="eyebrow">Record a transaction</p><h2 id="purchase-title">Add a purchase lot</h2></div><button className="icon-button" aria-label="Close purchase form" onClick={onClose}><X /></button></header>
+      <header><div><p className="eyebrow">Record a Transaction</p><h2 id="purchase-title">Add a Purchase Lot</h2></div><button className="icon-button" aria-label="Close purchase form" onClick={onClose}><X /></button></header>
       <form onSubmit={submit}>
-        <label htmlFor="instrument-search">Find an instrument</label>
+        <label htmlFor="instrument-search">Find an Instrument</label>
         <div className="input-with-icon"><Search aria-hidden="true" /><input id="instrument-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by ticker, name or ISIN" autoFocus /></div>
-        <fieldset className="instrument-options"><legend>Select exact instrument and venue</legend>{options.map((item) => <label className={`instrument-option ${instrumentId === item.id ? "selected" : ""}`} key={item.id}><input type="radio" name="instrument" value={item.id} checked={instrumentId === item.id} onChange={() => setInstrumentId(item.id)} /><span><strong>{item.ticker} <em>{item.assetType === "FUND" ? "Fund" : "ETF"}</em></strong><small>{item.name}</small><small>{item.isin} · {item.exchange} · {item.currency}</small></span></label>)}{!options.length && <p className="empty-inline">No verified instrument matches this search.</p>}</fieldset>
-        <div className="form-grid"><label>Shares / units<input name="shares" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase price per share / unit<input name="price" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase date<input name="date" type="date" max={new Date().toISOString().slice(0, 10)} required /></label><label>Broker fees in EUR <span className="optional">Optional</span><input name="fees" type="number" min="0" step="0.01" defaultValue="0" inputMode="decimal" /><small>Commission only. Do not enter TER or ongoing fund charges.</small></label></div>
+        <fieldset className="instrument-options"><legend>Select Exact Instrument and Venue</legend>{options.map((item) => <label className={`instrument-option ${instrumentId === item.id ? "selected" : ""}`} key={item.id}><input type="radio" name="instrument" value={item.id} checked={instrumentId === item.id} onChange={() => setInstrumentId(item.id)} /><InstrumentLogo instrument={item} /><span><strong>{item.ticker} <em>{item.assetType === "FUND" ? "Fund" : "ETF"}</em></strong><small>{item.name}</small><small>{item.isin} · {item.exchange} · {item.currency}</small></span></label>)}{!options.length && <p className="empty-inline">No verified instrument matches this search.</p>}</fieldset>
+        <div className="form-grid"><label>Shares<input name="shares" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase Price per Share<input name="price" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase Date<input name="date" type="date" max={toLocalIsoDate()} required /></label><label>Broker Fees <span className="optional">Optional</span><span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" min="0" step="0.01" defaultValue="0" inputMode="decimal" /></span></label></div>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <footer><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button type="submit" className="button primary">Add purchase</button></footer>
+        <footer><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button type="submit" className="button primary">Add Purchase</button></footer>
       </form>
     </section>
   </div>;

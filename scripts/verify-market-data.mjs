@@ -7,12 +7,14 @@ if (!Array.isArray(portfolio.instruments)) throw new Error("Template has no inst
 const results = [];
 for (const instrument of portfolio.instruments) {
   if (!instrument.yahooSymbol) {
-    results.push({ ticker: instrument.ticker, isin: instrument.isin, symbol: "APY estimate", ok: true, providerVenue: "Moneybase", currency: instrument.currency, latestTimestamp: null, error: null });
+    results.push({ ticker: instrument.ticker, isin: instrument.isin, symbol: "Missing", ok: false, providerVenue: instrument.exchange, currency: instrument.currency, latestTimestamp: null, error: "Yahoo symbol missing" });
     continue;
   }
+  const isFund = instrument.assetType === "FUND";
+  const interval = isFund ? "1d" : "5m";
   const base = proxy
-    ? `${proxy.replace(/\/$/, "")}/yahoo/chart?symbol=${encodeURIComponent(instrument.yahooSymbol)}&range=5d&interval=5m`
-    : `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(instrument.yahooSymbol)}?range=5d&interval=5m&events=history`;
+    ? `${proxy.replace(/\/$/, "")}/yahoo/chart?symbol=${encodeURIComponent(instrument.yahooSymbol)}&range=5d&interval=${interval}`
+    : `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(instrument.yahooSymbol)}?range=5d&interval=${interval}&events=history`;
   try {
     const response = await fetch(base, { headers: { Accept: "application/json", "User-Agent": "EUR-Portfolio-Tracker-Verification/1.0" } });
     const payload = await response.json();
@@ -21,9 +23,11 @@ for (const instrument of portfolio.instruments) {
     const closes = chart?.indicators?.quote?.[0]?.close ?? [];
     const latestIndex = closes.findLastIndex((value) => Number.isFinite(value) && value > 0);
     const venue = String(meta?.fullExchangeName ?? meta?.exchangeName ?? "");
-    const venueOk = (instrument.exchange === "Xetra" && /xetra/i.test(venue)) ||
+    const venueOk = isFund || (instrument.exchange === "Xetra" && /xetra/i.test(venue)) ||
       (instrument.exchange === "Milan" && /(milan|italy)/i.test(venue));
-    const typeOk = meta?.instrumentType === "ETF";
+    const typeOk = isFund
+      ? ["MUTUALFUND", "FUND"].includes(meta?.instrumentType)
+      : meta?.instrumentType === "ETF";
     const ok = response.ok && meta?.symbol === instrument.yahooSymbol && meta?.currency === instrument.currency && venueOk && typeOk && latestIndex >= 0;
     results.push({ ticker: instrument.ticker, isin: instrument.isin, symbol: instrument.yahooSymbol, ok, providerVenue: venue, currency: meta?.currency, latestTimestamp: latestIndex >= 0 ? new Date(chart.timestamp[latestIndex] * 1000).toISOString() : null, error: ok ? null : "identity or price validation failed" });
   } catch (error) {

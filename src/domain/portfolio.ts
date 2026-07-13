@@ -22,6 +22,7 @@ export function calculatePosition(
     (sum, lot) => sum + lot.shares * lot.pricePerShare + lot.fees,
     0,
   );
+  const totalFees = lots.reduce((sum, lot) => sum + lot.fees, 0);
   const averagePurchasePrice =
     totalShares > 0 ? purchaseCostExcludingFees / totalShares : 0;
   const yieldEstimate = instrument.assetType === "FUND" &&
@@ -33,32 +34,51 @@ export function calculatePosition(
         valuationDate,
       )
     : null;
-  const currentValue = yieldEstimate?.currentValue ?? (quote ? totalShares * quote.price : null);
+  // A published price/NAV is authoritative. APY accrual is an explicit fallback
+  // for a cash fund when provider NAV data is unavailable.
+  const fundNavRatio = instrument.assetType === "FUND" && quote && averagePurchasePrice > 0
+    ? quote.price / averagePurchasePrice
+    : null;
+  const costBasisWarning = fundNavRatio !== null && (fundNavRatio > 5 || fundNavRatio < 0.2)
+    ? "The recorded fund purchase price is not comparable with the current NAV. Re-import or review this lot before calculating a return."
+    : null;
+  const currentValue = costBasisWarning
+    ? null
+    : quote ? totalShares * quote.price : yieldEstimate?.currentValue ?? null;
+  const marketReturn = currentValue === null ? null : currentValue - purchaseCostExcludingFees;
+  const marketReturnPercentage = marketReturn === null || purchaseCostExcludingFees <= 0
+    ? null
+    : (marketReturn / purchaseCostExcludingFees) * 100;
   const profitLoss = currentValue === null ? null : currentValue - totalCost;
   const profitLossPercentage =
     profitLoss === null || totalCost <= 0 ? null : (profitLoss / totalCost) * 100;
-  const dailyChange = yieldEstimate?.dailyChange ?? (
-    quote?.previousClose == null
+  const dailyChange = quote && !costBasisWarning ? (
+    quote.previousClose == null
       ? null
       : totalShares * (quote.price - quote.previousClose)
-  );
-  const dailyChangePercentage = yieldEstimate?.dailyChangePercentage ?? (
-    quote?.previousClose == null || quote.previousClose <= 0
+  ) : yieldEstimate?.dailyChange ?? null;
+  const dailyChangePercentage = quote && !costBasisWarning ? (
+    quote.previousClose == null || quote.previousClose <= 0
       ? null
       : ((quote.price - quote.previousClose) / quote.previousClose) * 100
-  );
+  ) : yieldEstimate?.dailyChangePercentage ?? null;
 
   return {
     instrument,
     lots,
     totalShares,
+    purchaseCostExcludingFees,
+    totalFees,
     totalCost,
     averagePurchasePrice,
     currentValue,
+    marketReturn,
+    marketReturnPercentage,
     profitLoss,
     profitLossPercentage,
     dailyChange,
     dailyChangePercentage,
+    costBasisWarning,
     quote,
   };
 }
@@ -211,6 +231,11 @@ export function calculatePortfolioSummary(
     (sum, position) => sum + position.totalCost,
     0,
   );
+  const pricedPurchaseCost = pricedPositions.reduce(
+    (sum, position) => sum + position.purchaseCostExcludingFees,
+    0,
+  );
+  const marketReturn = currentValue - pricedPurchaseCost;
   const profitLoss = currentValue - pricedCost;
   const dailyChangePositions = pricedPositions.filter(
     (position) => position.dailyChange !== null,
@@ -229,6 +254,9 @@ export function calculatePortfolioSummary(
   return {
     totalInvested,
     currentValue,
+    marketReturn,
+    marketReturnPercentage:
+      pricedPurchaseCost > 0 ? (marketReturn / pricedPurchaseCost) * 100 : null,
     profitLoss,
     profitLossPercentage:
       pricedCost > 0 ? (profitLoss / pricedCost) * 100 : null,

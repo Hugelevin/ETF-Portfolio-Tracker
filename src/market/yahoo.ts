@@ -119,7 +119,7 @@ export function parseYahooChart(
       asOf: latest.timestamp,
       fetchedAt,
       source: "yahoo",
-      label: "Market data",
+      label: instrument.assetType === "FUND" ? "Fund NAV" : "Market Price",
       stale: Number.isFinite(fetchedMs) && fetchedMs - asOfMs > staleAfterMs,
     },
     history,

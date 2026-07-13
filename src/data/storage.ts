@@ -29,16 +29,16 @@ function applyInstrumentDefaults(portfolio: PortfolioDocument): PortfolioDocumen
         instrument.assetType === verified.assetType;
       const venueMatches = verified && (
         instrument.exchange === verified.exchange ||
-        (instrument.assetType === "FUND" && instrument.exchange === "Daily fund NAV") ||
+        (instrument.assetType === "FUND" && ["Daily fund NAV", "Moneybase cash fund"].includes(instrument.exchange)) ||
         Boolean(instrument.micCode && verified.micCode && instrument.micCode === verified.micCode)
       );
       if (!verified || !identityMatches || !venueMatches) return instrument;
       return {
         ...instrument,
-        exchange: instrument.assetType === "FUND" && instrument.exchange === "Daily fund NAV"
+        exchange: instrument.assetType === "FUND" && instrument.exchange !== verified.exchange
           ? verified.exchange
           : instrument.exchange,
-        yahooSymbol: instrument.assetType === "FUND" ? undefined : instrument.yahooSymbol,
+        yahooSymbol: instrument.yahooSymbol ?? verified.yahooSymbol,
         annualYieldPercentage: instrument.annualYieldPercentage ?? verified.annualYieldPercentage,
       };
     }),

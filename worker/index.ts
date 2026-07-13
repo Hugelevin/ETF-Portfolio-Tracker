@@ -1,10 +1,6 @@
-export interface Env {
-  ALLOWED_ORIGINS: string;
-  ALLOWED_SYMBOLS?: string;
-}
-
 const DEFAULT_SYMBOLS = [
   "ANAU-ETFP.MI",
+  "0P0001CD0Q.F",
   "SPYY.DE",
   "VVSM.DE",
   "JEDI.DE",
@@ -75,12 +71,11 @@ async function yahooChart(request: Request, env: Env, ctx: ExecutionContext, url
   const upstreamResponse = await fetch(upstream, {
     headers: { "Accept": "application/json", "User-Agent": "EUR-Portfolio-Tracker/1.0" },
   });
-  const body = await upstreamResponse.text();
   const headers = corsHeaders(request, env);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", upstreamResponse.ok ? "public, max-age=60" : "no-store");
   headers.set("X-Market-Source", "Yahoo Finance chart");
-  const response = new Response(body, { status: upstreamResponse.status, headers });
+  const response = new Response(upstreamResponse.body, { status: upstreamResponse.status, headers });
   if (upstreamResponse.ok) ctx.waitUntil(edgeCache.put(cacheKey, response.clone()));
   return response;
 }
@@ -96,7 +91,7 @@ async function yahooSearch(request: Request, env: Env, url: URL) {
   const headers = corsHeaders(request, env);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", "public, max-age=300");
-  return new Response(await response.text(), {
+  return new Response(response.body, {
     status: response.status,
     headers,
   });
@@ -118,4 +113,4 @@ export default {
       return json(request, env, { error: "Market-data upstream request failed" }, 502);
     }
   },
-};
+} satisfies ExportedHandler<Env>;

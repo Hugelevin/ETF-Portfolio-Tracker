@@ -43,9 +43,13 @@ describe("calculatePosition", () => {
     const position = calculatePosition(instrument, lots, quote);
 
     expect(position.totalShares).toBe(25);
+    expect(position.purchaseCostExcludingFees).toBe(1_852);
+    expect(position.totalFees).toBe(5);
     expect(position.totalCost).toBe(1_857);
     expect(position.averagePurchasePrice).toBeCloseTo(74.08);
     expect(position.currentValue).toBe(2_000);
+    expect(position.marketReturn).toBe(148);
+    expect(position.marketReturnPercentage).toBeCloseTo(7.9914);
     expect(position.profitLoss).toBe(143);
     expect(position.profitLossPercentage).toBeCloseTo(7.7006);
     expect(position.dailyChange).toBe(25);
@@ -80,16 +84,70 @@ describe("calculatePosition", () => {
       annualYieldPercentage: 2.28,
     };
     const lots: PurchaseLot[] = [
-      { id: "cash-1", instrumentId: fund.id, shares: 74.0761, pricePerShare: 10.13, purchaseDate: "2025-06-13", fees: 0 },
+      { id: "cash-1", instrumentId: fund.id, shares: 10, pricePerShare: 100, purchaseDate: "2025-06-13", fees: 0 },
     ];
 
     const position = calculatePosition(fund, lots, null, new Date("2026-07-13T12:00:00Z"));
 
-    expect(position.totalCost).toBeCloseTo(750.39, 2);
-    expect(position.currentValue).toBeCloseTo(769.00, 0);
-    expect(position.profitLoss).toBeCloseTo(18.61, 0);
+    expect(position.totalCost).toBe(1_000);
+    expect(position.currentValue).toBeCloseTo(1_025, 0);
+    expect(position.profitLoss).toBeCloseTo(25, 0);
     expect(position.dailyChange).toBeGreaterThan(0);
     expect(position.dailyChangePercentage).toBeCloseTo(2.28 / 365, 2);
+  });
+
+  it("uses the published fund NAV before the APY estimate", () => {
+    const fund: Instrument = {
+      id: "ummepsa-nav-eur",
+      name: "UBS (Irl) Select Money Market Fund — EUR P Acc",
+      ticker: "UMMEPSA",
+      isin: "IE00BWWCR731",
+      exchange: "Moneybase Cash Fund",
+      currency: "EUR",
+      assetType: "FUND",
+      yahooSymbol: "0P0001CD0Q.F",
+      annualYieldPercentage: 2.28,
+    };
+    const lots: PurchaseLot[] = [
+      { id: "cash-1", instrumentId: fund.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-05-20", fees: 0 },
+    ];
+    const navQuote: MarketQuote = {
+      ...quote,
+      instrumentId: fund.id,
+      price: 100.2,
+      previousClose: 100.19,
+      exchange: "Daily Fund NAV",
+    };
+
+    const position = calculatePosition(fund, lots, navQuote, new Date("2026-07-13T12:00:00Z"));
+
+    expect(position.currentValue).toBeCloseTo(1_002, 6);
+    expect(position.marketReturn).toBeCloseTo(2, 6);
+    expect(position.quote).toBe(navQuote);
+  });
+
+  it("does not calculate a fund return when a legacy cost basis is incompatible with NAV", () => {
+    const fund: Instrument = {
+      ...instrument,
+      id: "cash-fund",
+      assetType: "FUND",
+      annualYieldPercentage: 2.28,
+    };
+    const lots: PurchaseLot[] = [
+      { id: "legacy-cash", instrumentId: fund.id, shares: 10, pricePerShare: 10, purchaseDate: "2026-05-20", fees: 0 },
+    ];
+    const navQuote: MarketQuote = {
+      ...quote,
+      instrumentId: fund.id,
+      price: 100,
+      previousClose: 99.99,
+    };
+
+    const position = calculatePosition(fund, lots, navQuote);
+
+    expect(position.currentValue).toBeNull();
+    expect(position.marketReturn).toBeNull();
+    expect(position.costBasisWarning).toMatch(/not comparable with the current NAV/i);
   });
 
   it("applies later cash-fund APY changes only from their effective dates", () => {
@@ -132,6 +190,7 @@ describe("calculatePortfolioSummary", () => {
 
     expect(summary.totalInvested).toBe(2_021);
     expect(summary.currentValue).toBe(2_000);
+    expect(summary.marketReturn).toBe(80);
     expect(summary.profitLoss).toBe(80);
     expect(summary.pricedPositions).toBe(1);
     expect(summary.totalPositions).toBe(3);
@@ -171,13 +230,13 @@ describe("buildPositionValueHistory", () => {
 
   it("scales the chart around portfolio values instead of forcing zero into view", () => {
     const domain = calculateChartDomain([
-      { timestamp: "2026-06-19T16:30:00.000Z", investedValue: 2_874.25, marketValue: 3_178.83 },
-      { timestamp: "2026-06-20T16:30:00.000Z", investedValue: 2_874.25, marketValue: 3_204.5 },
+      { timestamp: "2026-06-19T16:30:00.000Z", investedValue: 1_000, marketValue: 1_100 },
+      { timestamp: "2026-06-20T16:30:00.000Z", investedValue: 1_000, marketValue: 1_120 },
     ], true);
 
-    expect(domain[0]).toBeGreaterThan(2_500);
-    expect(domain[0]).toBeLessThanOrEqual(2_874.25);
-    expect(domain[1]).toBeGreaterThanOrEqual(3_204.5);
+    expect(domain[0]).toBeGreaterThan(900);
+    expect(domain[0]).toBeLessThanOrEqual(1_000);
+    expect(domain[1]).toBeGreaterThanOrEqual(1_120);
   });
 });
 

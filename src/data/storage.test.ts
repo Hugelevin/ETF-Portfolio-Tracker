@@ -87,9 +87,9 @@ describe("portfolio storage", () => {
     };
 
     const migrated = storage.savePortfolio(legacy).instruments[0];
-    expect(migrated?.exchange).toBe("Moneybase cash fund");
+    expect(migrated?.exchange).toBe("Moneybase Cash Fund");
     expect(migrated?.annualYieldPercentage).toBe(2.28);
-    expect(migrated?.yahooSymbol).toBeUndefined();
+    expect(migrated?.yahooSymbol).toBe("0P0001CD0Q.F");
   });
 
   it("exports only portfolio data and validates it on import", () => {

@@ -10,6 +10,15 @@ const RANGE_QUERY: Record<ChartRange, { range: string; interval: string }> = {
   "MAX": { range: "max", interval: "1d" },
 };
 
+const FUND_RANGE_QUERY: Record<ChartRange, { range: string; interval: string }> = {
+  "1D": { range: "5d", interval: "1d" },
+  "1W": { range: "5d", interval: "1d" },
+  "1M": { range: "1mo", interval: "1d" },
+  "3M": { range: "3mo", interval: "1d" },
+  "1Y": { range: "1y", interval: "1d" },
+  "MAX": { range: "max", interval: "1d" },
+};
+
 function endpoint(proxyUrl: string, path: string): URL {
   const base = proxyUrl.trim().replace(/\/+$/, "");
   if (!base) throw new Error("Configure the market-data Worker URL in Settings");
@@ -40,7 +49,7 @@ export async function fetchYahooRecord(
 ): Promise<MarketRecord> {
   if (!instrument.yahooSymbol) throw new Error("No Yahoo Finance symbol is configured for this instrument");
   const url = endpoint(proxyUrl, "/yahoo/chart");
-  const query = RANGE_QUERY[range];
+  const query = instrument.assetType === "FUND" ? FUND_RANGE_QUERY[range] : RANGE_QUERY[range];
   url.searchParams.set("symbol", instrument.yahooSymbol);
   url.searchParams.set("range", query.range);
   url.searchParams.set("interval", query.interval);

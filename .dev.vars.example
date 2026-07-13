@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local Worker development. This file contains no secrets.
+ALLOWED_ORIGINS="http://localhost:5173,http://localhost:4173"

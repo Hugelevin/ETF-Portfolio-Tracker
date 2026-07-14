@@ -98,6 +98,8 @@ td > strong, td > small { display: block; }
 .holding-card .instrument-logo { width: 52px; height: 52px; border-radius: 13px; }
 .holding-card .status-stack { align-self: start; }
 .holding-card .status { margin-top: .15rem; }
+.holding-delete { align-self: start; color: var(--red); }
+.holding-delete:hover { color: var(--red); background: var(--red-soft); border-color: #efcece; }
 .holding-menu, .order-menu { position: relative; }
 .holding-menu summary, .order-menu summary { width: 44px; height: 44px; display: grid; place-items: center; list-style: none; border-radius: 10px; color: var(--ink); cursor: pointer; }
 .holding-menu summary::-webkit-details-marker, .order-menu summary::-webkit-details-marker { display: none; }
@@ -109,7 +111,7 @@ td > strong, td > small { display: block; }
 .holding-menu button, .order-menu button.danger { color: var(--red); }
 .holding-overview { width: 100%; min-height: 108px; padding: .55rem 0 .45rem; display: grid; grid-template-columns: minmax(0,1fr) clamp(132px, 40vw, 168px); align-items: center; gap: .65rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .holding-performance { min-width: 0; display: grid; justify-items: start; gap: .38rem; }
-.holding-value { font-size: clamp(1.45rem, 7vw, 1.75rem); line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.holding-value { font-size: clamp(1.3rem, 6.1vw, 1.55rem); line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .return-chip { display: inline-flex; align-items: center; gap: .32rem; padding: .3rem .48rem; border-radius: 8px; font-size: .78rem; font-weight: 800; }
 .return-chip.positive { background: #e4f4ec; }
 .return-chip.negative { background: var(--red-soft); }
@@ -263,8 +265,9 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .range-controls button.active { color: var(--green-dark); background: #fff; box-shadow: 0 2px 7px rgba(26,61,52,.1); }
 .chart { height: 330px; width: 100%; }
 .chart .recharts-wrapper, .chart .recharts-surface { fill: transparent; }
-.chart .recharts-surface:focus { outline: none; }
-.chart .recharts-surface:focus-visible { outline: 2px solid #74aa9f; outline-offset: -2px; }
+.chart .recharts-wrapper:focus, .chart .recharts-surface:focus, .chart .recharts-layer:focus { outline: none !important; }
+.chart:focus { outline: none; }
+.chart:focus-visible { outline: 2px solid #74aa9f; outline-offset: 2px; border-radius: 10px; }
 .chart-empty { height: 260px; display: flex; gap: .6rem; align-items: center; justify-content: center; color: var(--muted); background: #fafcfb; border-radius: 10px; }
 .chart-skeleton { background: linear-gradient(100deg,#f6f9f8 20%,#edf3f0 40%,#f6f9f8 60%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
 .chart-hint { color: var(--muted); font-size: .75rem; margin: -.35rem 0 .7rem; }
@@ -372,6 +375,8 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .site-footer { flex-direction: column; }
   .form-grid { grid-template-columns: 1fr; }
   .settings-data-actions { grid-template-columns: 1fr; }
+  .settings-data-actions .button { display: grid; grid-template-columns: 20px 112px; align-items: center; justify-content: center; column-gap: .6rem; text-align: left; }
+  .settings-data-actions .button svg { width: 20px; height: 20px; justify-self: center; }
   .modal-backdrop { padding: 0; place-items: end stretch; }
   .modal { width: 100%; max-height: 94vh; border-radius: 18px 18px 0 0; }
   .modal form > footer, .modal > footer { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }

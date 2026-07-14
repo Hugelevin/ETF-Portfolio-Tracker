@@ -190,7 +190,9 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(sparkline!.width).toBeGreaterThanOrEqual(140);
   expect(sparkline!.height).toBeGreaterThanOrEqual(64);
   const holdingPriceSize = await page.locator(".holding-value").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
-  expect(holdingPriceSize).toBeLessThanOrEqual(29);
+  expect(holdingPriceSize).toBeLessThanOrEqual(25);
+  await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "More actions for JEDI" })).toHaveCount(0);
   await expect(page.locator(".holding-card")).toContainText("|");
   await expect(page.locator(".holding-card")).not.toContainText("·");
   const holdingNameStyle = await page.locator(".card-instrument small").evaluate((element) => {
@@ -248,6 +250,8 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
   expect(box).not.toBeNull();
   await page.mouse.move(box!.x + box!.width * .65, box!.y + box!.height * .5);
   await page.mouse.click(box!.x + box!.width * .65, box!.y + box!.height * .5);
+  await expect(page.locator(".chart")).toHaveAttribute("tabindex", "0");
+  await expect(page.locator(".chart .recharts-surface")).not.toHaveAttribute("tabindex", "0");
   const blackBoxStyles = await page.locator(".chart .recharts-wrapper").evaluate((wrapper) => {
     const elements = [wrapper, ...wrapper.querySelectorAll("svg, rect, path")];
     return elements.map((element) => {
@@ -257,6 +261,24 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
     }).filter((item) => (item.outline.includes("rgb(0, 0, 0)") || item.stroke === "rgb(0, 0, 0)" || item.fill === "rgb(0, 0, 0)" || item.border.includes("rgb(0, 0, 0)")) && item.width > 200 && item.height > 100);
   });
   expect(blackBoxStyles).toEqual([]);
+});
+
+test("aligns mobile recovery button icons and labels", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+
+  const actions = await page.locator(".settings-data-actions .button").all();
+  const alignments = await Promise.all(actions.map((action) => action.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { display: style.display, columns: style.gridTemplateColumns, alignment: style.alignItems, justification: style.justifyContent };
+  })));
+  for (const alignment of alignments) {
+    expect(alignment.display).toBe("grid");
+    expect(alignment.columns.split(" ")).toHaveLength(2);
+    expect(alignment.alignment).toBe("center");
+    expect(alignment.justification).toBe("center");
+  }
 });
 
 test("does not overflow on the narrowest supported phone", async ({ page }) => {

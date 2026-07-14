@@ -126,9 +126,9 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     <div className="chart-key" aria-hidden="true">
       {mode === "price" ? <><span><i className="key-market" /> Market Price</span>{averageBuyVisible && <span><i className="key-invested dashed" /> Average Buy {formatMoney(averagePurchasePrice, currency)}</span>}</> : <><span><i className="key-market" /> Holding Value</span><span><i className="key-invested" /> Invested Cost</span></>}
     </div>
-    <div className="chart" role="img" aria-label={ariaLabel}>
+    <div className="chart" role="img" aria-label={ariaLabel} tabIndex={0}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 16, right: 12, left: 4, bottom: 0 }}>
+        <ComposedChart accessibilityLayer={false} data={chartData} margin={{ top: 16, right: 12, left: 4, bottom: 0 }}>
           <defs><linearGradient id="marketFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#296f63" stopOpacity={0.28}/><stop offset="100%" stopColor="#296f63" stopOpacity={0.02}/></linearGradient></defs>
           <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dfe7e4" />
           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={36} />

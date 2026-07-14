@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, MoreHorizontal, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronRight, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import type { MarketPoint, PositionMetrics } from "../types";
 import { formatMoney, formatNumber, formatPercent } from "../format";
 import { HoldingSparkline } from "./HoldingSparkline";
@@ -50,7 +50,7 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
         <header>
           <button className="card-instrument" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button>
           <StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} />
-          <details className="holding-menu"><summary aria-label={`More actions for ${position.instrument.ticker}`}><MoreHorizontal aria-hidden="true" /></summary><div><button type="button" onClick={() => onDelete(position)}><Trash2 aria-hidden="true" /> Delete Holding</button></div></details>
+          <button type="button" className="icon-button holding-delete" aria-label={`Delete ${position.instrument.ticker} holding`} onClick={() => onDelete(position)}><Trash2 aria-hidden="true" /></button>
         </header>
         <button className="holding-overview" onClick={() => onSelect(position)}>
           <span className="sr-only">Open {position.instrument.ticker} details: </span>

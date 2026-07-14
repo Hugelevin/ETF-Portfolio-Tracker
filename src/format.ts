@@ -23,6 +23,12 @@ export function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+export function formatDate(value: string): string {
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(date);
+}
+
 export function toLocalIsoDate(date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

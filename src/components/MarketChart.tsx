@@ -4,6 +4,7 @@ import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveCont
 import { buildPositionValueHistory, calculateChartDomain } from "../domain/portfolio";
 import { formatMoney, formatPercent } from "../format";
 import type { MarketPoint, PurchaseLot } from "../types";
+import { calculatePriceDomain } from "./chartDomain";
 
 export type ChartMode = "price" | "value";
 
@@ -29,23 +30,13 @@ interface ChartTooltipProps {
   active?: boolean;
   payload?: Array<{ payload: ChartDatum }>;
   currency: string;
+  mode: ChartMode;
 }
 
 function chartLabel(timestamp: string, intraday: boolean) {
   return new Date(timestamp).toLocaleString("en-GB", intraday
     ? { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }
     : { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function priceDomain(points: ChartDatum[], averagePurchasePrice: number): [number, number] {
-  const prices = points.map((point) => point.price);
-  if (averagePurchasePrice > 0) prices.push(averagePurchasePrice);
-  if (!prices.length) return [0, 1];
-  const minimum = Math.min(...prices);
-  const maximum = Math.max(...prices);
-  const span = maximum - minimum;
-  const padding = span > 0 ? span * 0.12 : Math.max(maximum * 0.01, 0.01);
-  return [Math.max(0, minimum - padding), maximum + padding];
 }
 
 function ownedPosition(lots: PurchaseLot[], timestamp: string) {
@@ -57,15 +48,17 @@ function ownedPosition(lots: PurchaseLot[], timestamp: string) {
   };
 }
 
-function ChartTooltip({ active, payload, currency }: ChartTooltipProps) {
+function ChartTooltip({ active, payload, currency, mode }: ChartTooltipProps) {
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
   return <div className="chart-tooltip">
     <strong>{point.label}</strong>
     <dl>
       <div><dt>Price</dt><dd>{formatMoney(point.price, currency)}</dd></div>
-      <div><dt>Holding Value</dt><dd>{point.marketValue === undefined ? "Not Held" : formatMoney(point.marketValue, currency)}</dd></div>
-      <div><dt>Change</dt><dd className={point.change < 0 ? "negative-text" : point.change > 0 ? "positive-text" : ""}>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</dd></div>
+      {mode === "value" && <>
+        <div><dt>Holding Value</dt><dd>{point.marketValue === undefined ? "Not Held" : formatMoney(point.marketValue, currency)}</dd></div>
+        <div><dt>Change</dt><dd className={point.change < 0 ? "negative-text" : point.change > 0 ? "positive-text" : ""}>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</dd></div>
+      </>}
     </dl>
   </div>;
 }
@@ -106,8 +99,10 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
   }, [history, lots, intraday]);
   const data = mode === "price" ? priceData : valueData;
   const domain = useMemo(() => mode === "price"
-    ? priceDomain(priceData, averagePurchasePrice)
-    : calculateChartDomain(valueData.map((point) => ({ timestamp: point.timestamp, marketValue: point.marketValue ?? 0, investedValue: point.investedValue ?? 0 })), true), [averagePurchasePrice, mode, priceData, valueData]);
+    ? calculatePriceDomain(priceData)
+    : calculateChartDomain(valueData.map((point) => ({ timestamp: point.timestamp, marketValue: point.marketValue ?? 0, investedValue: point.investedValue ?? 0 })), true), [mode, priceData, valueData]);
+  const averageBuyVisible = mode === "price" && averagePurchasePrice > 0
+    && averagePurchasePrice >= domain[0] && averagePurchasePrice <= domain[1];
 
   if (!data.length) {
     const message = mode === "value"
@@ -117,12 +112,12 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
   }
 
   const ariaLabel = mode === "price"
-    ? `Historical market price chart with ${data.length} data points and average buy price baseline`
+    ? `Historical market price chart with ${data.length} data points${averageBuyVisible ? " and average buy price baseline" : ""}`
     : `Historical holding value and invested cost chart with ${data.length} data points`;
 
   return <>
     <div className="chart-key" aria-hidden="true">
-      {mode === "price" ? <><span><i className="key-market" /> Market Price</span><span><i className="key-invested dashed" /> Average Buy {formatMoney(averagePurchasePrice, currency)}</span></> : <><span><i className="key-market" /> Holding Value</span><span><i className="key-invested" /> Invested Cost</span></>}
+      {mode === "price" ? <><span><i className="key-market" /> Market Price</span>{averageBuyVisible && <span><i className="key-invested dashed" /> Average Buy {formatMoney(averagePurchasePrice, currency)}</span>}</> : <><span><i className="key-market" /> Holding Value</span><span><i className="key-invested" /> Invested Cost</span></>}
     </div>
     <div className="chart" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
@@ -133,10 +128,10 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
           <YAxis domain={domain} tickFormatter={(value: number) => mode === "price"
             ? new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)
             : new Intl.NumberFormat("en-GB", { notation: "compact" }).format(value)} tickLine={false} axisLine={false} width={58} />
-          <Tooltip content={<ChartTooltip currency={currency} />} cursor={{ stroke: "#94aaa4", strokeDasharray: "3 3" }} />
+          <Tooltip content={<ChartTooltip currency={currency} mode={mode} />} cursor={{ stroke: "#94aaa4", strokeDasharray: "3 3" }} />
           {mode === "price" ? <>
             <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={data.length <= 2 ? { r: 3 } : false} />
-            {averagePurchasePrice > 0 && <ReferenceLine y={averagePurchasePrice} stroke="#d18b3f" strokeWidth={2} strokeDasharray="6 5" />}
+            {averageBuyVisible && <ReferenceLine y={averagePurchasePrice} stroke="#d18b3f" strokeWidth={2} strokeDasharray="6 5" />}
           </> : <>
             <Area type="monotone" dataKey="marketValue" name="Holding Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={data.length <= 2 ? { r: 3 } : false} />
             <Line type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={data.length <= 2 ? { r: 3 } : false} />
@@ -147,7 +142,7 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     <details className="data-alternative">
       <summary><Table2 aria-hidden="true" /><span>View Chart Data as a Table</span><ChevronDown className="data-chevron" aria-hidden="true" /></summary>
       <div className="compact-table">
-        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Change</th></tr></thead><tbody>{priceData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{point.marketValue === undefined ? "Not Held" : formatMoney(point.marketValue, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
+        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
       </div>
     </details>
   </>;

@@ -56,6 +56,9 @@ test("purchase form is keyboard reachable", async ({ page }) => {
 test("loads a distinct one-year series and compares value after the first order", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await page.getByRole("button", { name: "1D" }).click();
+  await expect(page.getByRole("img", { name: "Historical market price chart with 2 data points" })).toBeVisible();
+  await expect(page.getByText(/Average Buy €76.80/)).toHaveCount(0);
   await page.getByRole("button", { name: "1Y" }).click();
   const priceChart = page.getByRole("img", { name: "Historical market price chart with 3 data points and average buy price baseline" });
   await expect(priceChart).toBeVisible();
@@ -67,8 +70,8 @@ test("loads a distinct one-year series and compares value after the first order"
   const tooltip = page.locator(".chart-tooltip");
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toContainText("Price");
-  await expect(tooltip).toContainText("Holding Value");
-  await expect(tooltip).toContainText("Change");
+  await expect(tooltip).not.toContainText("Holding Value");
+  await expect(tooltip).not.toContainText("Change");
   await expect(page.getByRole("dialog").getByText("€80.00", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Holding Value" }).click();
   await expect(page.getByRole("img", { name: "Historical holding value and invested cost chart with 2 data points" })).toBeVisible();
@@ -124,6 +127,15 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(logoMark!.width / logoTile!.width).toBeGreaterThan(.96);
   expect(logoMark!.height / logoTile!.height).toBeGreaterThan(.96);
 
+  const refresh = await page.getByRole("button", { name: "Refresh Prices" }).boundingBox();
+  const refreshIcon = await page.locator(".refresh-button svg").boundingBox();
+  expect(refresh).not.toBeNull();
+  expect(refreshIcon).not.toBeNull();
+  expect(Math.abs((refresh!.x + refresh!.width / 2) - (refreshIcon!.x + refreshIcon!.width / 2))).toBeLessThan(1);
+  expect(Math.abs((refresh!.y + refresh!.height / 2) - (refreshIcon!.y + refreshIcon!.height / 2))).toBeLessThan(1);
+
+  await expect(page.getByRole("img", { name: /JEDI 7-day price trend/ })).toBeVisible();
+
   await page.getByRole("button", { name: "Open JEDI details" }).click();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   await expect(page.getByText(/Manual Price Fallback/i)).toHaveCount(0);
@@ -169,18 +181,18 @@ test("shows an explicit rate-limit error without inventing a price", async ({ pa
   await expect(page.getByLabel("0 of 1 EUR positions valued")).toBeVisible();
 });
 
-test("filters and searches holdings from the compact toolbar", async ({ page }) => {
+test("filters holdings from the compact mobile control", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  await expect(page.getByPlaceholder("Search holdings")).toBeVisible();
-  await expect(page.locator("#holdings-sort")).toHaveValue("value");
+  await expect(page.getByLabel("1 holding shown")).toBeVisible();
+  await expect(page.getByPlaceholder("Search holdings")).toHaveCount(0);
   await page.getByRole("button", { name: "Losers" }).click();
   await expect(page.getByText("No holdings match these filters.")).toBeVisible();
   await page.getByRole("button", { name: "Gainers" }).click();
   await expect(page.locator(".holding-card:visible").getByText("JEDI", { exact: true })).toBeVisible();
-  await page.getByPlaceholder("Search holdings").fill("missing ticker");
-  await expect(page.getByText("No holdings match these filters.")).toBeVisible();
+  await page.getByRole("button", { name: "All" }).click();
+  await expect(page.locator(".holding-card:visible")).toHaveCount(1);
 });
 
 test("browser back closes detail and purchase sheets before leaving dashboard", async ({ page }) => {
@@ -208,7 +220,8 @@ test("uses mobile order cards without horizontal overflow", async ({ page }) => 
 
   await expect(page.getByText("1 Order")).toBeVisible();
   await expect(page.getByLabel("Order actions for 2026-01-02")).toBeVisible();
-  await expect(page.locator(".order-card:visible").getByText("Purchase Price", { exact: true })).toBeVisible();
+  await expect(page.locator(".order-card:visible").getByText("Each", { exact: true })).toBeVisible();
+  await expect(page.locator(".order-card:visible").getByText("2 Jan 2026", { exact: true })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBe(0);
 });

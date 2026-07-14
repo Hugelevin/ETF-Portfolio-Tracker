@@ -124,9 +124,9 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 
 Fallback order is: Yahoo request → cached Yahoo → unavailable.
 
-Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default **Price** chart includes a weighted average purchase-price baseline. The optional **Holding Value** view compares historical holding value with invested cost, excludes broker fees and starts at the first purchase, so it never plots a misleading zero before shares were owned. Tooltips show the date, price, holding value and change. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
+Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default **Price** chart shows a weighted average purchase-price baseline when it falls inside the visible market range; a distant cost basis never flattens short-term price movement. Its tooltip shows only date and price. The optional **Holding Value** view compares historical holding value with invested cost, excludes broker fees and starts at the first purchase, so it never plots a misleading zero before shares were owned. Its tooltip also shows holding value and change. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
 
-On phones, the holdings toolbar supports search, sorting and gain/loss filters. Holding details and the purchase form behave like in-app pages: the browser Back gesture closes them before leaving the dashboard. Orders use touch-friendly cards on phones and a table on larger screens.
+On phones, holdings can be filtered to all positions, gainers or losers. Each card includes a 7-day price sparkline. Holding details and the purchase form behave like in-app pages: the browser Back gesture closes them before leaving the dashboard. Orders use compact touch-friendly cards on phones and a table on larger screens.
 
 ## Logo Assets
 

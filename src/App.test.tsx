@@ -6,6 +6,7 @@ import App from "./App";
 describe("portfolio dashboard", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.history.replaceState({}, "", "/");
     vi.restoreAllMocks();
   });
 
@@ -14,7 +15,7 @@ describe("portfolio dashboard", () => {
     expect(screen.getByText("Private - Local to This Browser")).toBeInTheDocument();
     expect(screen.getByText("Portfolio data remains on this device.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Build Your Portfolio" })).toBeInTheDocument();
-    expect(screen.getByText("0 of 0 EUR positions valued")).toBeInTheDocument();
+    expect(screen.getByLabelText("0 of 0 EUR positions valued")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: ".metric-card.primary strong" })).toBeInTheDocument();
   });
 
@@ -64,7 +65,7 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getByText("Previous Update")).toBeInTheDocument();
+    expect(screen.getAllByText("Cached").length).toBeGreaterThan(0);
   });
 
   it("hydrates valuation from another range without mislabelling its history as one month", async () => {
@@ -79,8 +80,8 @@ describe("portfolio dashboard", () => {
     render(<App />);
 
     expect(screen.getAllByText("€82.00").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 of 1 EUR positions valued")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
+    expect(screen.getByLabelText("1 of 1 EUR positions valued")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
     const detail = screen.getByRole("dialog", { name: /JEDI/ });
     expect(screen.getByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
     const metricCount = within(detail).getAllByText("+17.14%").length;
@@ -96,7 +97,7 @@ describe("portfolio dashboard", () => {
     window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-07T10:00:00Z", close: 78 }, { timestamp: "2026-07-13T10:00:00Z", close: 80 }] } }));
 
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
+    await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
 
     expect(screen.getByRole("heading", { name: "Market Price History" })).toBeInTheDocument();
     expect(screen.queryByText(/Manual Price Fallback/i)).not.toBeInTheDocument();
@@ -114,7 +115,7 @@ describe("portfolio dashboard", () => {
     window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-13T10:00:00Z", close: 78 }, { timestamp: "2026-07-13T10:00:00Z", close: 80 }] } }));
 
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Open JEDI details" }));
+    await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
     await user.click(screen.getByRole("button", { name: "1Y" }));
 
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
@@ -140,7 +141,7 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getByText("Market Data Unavailable")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Market status: Unavailable").length).toBeGreaterThan(0);
     expect(screen.queryByText("2.28% APY")).not.toBeInTheDocument();
     expect(screen.queryByText("€100.20")).not.toBeInTheDocument();
     vi.useRealTimers();
@@ -167,13 +168,13 @@ describe("portfolio dashboard", () => {
 
     const summary = screen.getByRole("region", { name: "Your EUR Portfolio" });
     expect(within(summary).getByText("€140.00")).toBeInTheDocument();
-    expect(within(summary).getByText("Broker Fees Paid Separately: €5.00")).toBeInTheDocument();
+    expect(within(summary).getByText("Fees: €5.00")).toBeInTheDocument();
     expect(within(summary).getByText("€20.00")).toBeInTheDocument();
     expect(within(summary).queryByText(/Net After Fees/i)).not.toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getByRole("columnheader", { name: "Price" })).toBeInTheDocument();
     expect(within(table).queryByText("Price / NAV")).not.toBeInTheDocument();
-    expect(within(table).getByText("Broker Fees Paid: €5.00")).toBeInTheDocument();
+    expect(within(table).queryByText("Broker Fees Paid: €5.00")).not.toBeInTheDocument();
   });
 
   it("uses neutral market wording and Yahoo-only settings", async () => {
@@ -195,10 +196,11 @@ describe("portfolio dashboard", () => {
     window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Open UMMEPSA details" }));
+    await user.click(screen.getAllByRole("button", { name: "Open UMMEPSA details" })[0]!);
     const dialog = screen.getByRole("dialog", { name: /UMMEPSA/ });
     expect(within(dialog).getByText("7-Day Annualised NAV Yield")).toBeInTheDocument();
     expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Moneybase's advertised APY/i)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText("APY (%)")).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "1D" }));
     expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
@@ -210,7 +212,7 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getByText("Market Data Unavailable")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Market status: Unavailable").length).toBeGreaterThan(0);
     expect(screen.queryByText("0% APY")).not.toBeInTheDocument();
   });
 });

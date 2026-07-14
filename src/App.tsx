@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 import { DetailDialog } from "./components/DetailDialog";
 import { HoldingsTable } from "./components/HoldingsTable";
@@ -15,6 +15,7 @@ import type { AppSettings, ChartRange, Instrument, MarketRecord, PortfolioDocume
 
 const browserStorage = createPortfolioStorage(window.localStorage);
 const cacheKey = (instrumentId: string, range: ChartRange) => `${instrumentId}:${range}`;
+const OVERLAY_STATE = "etfPortfolioOverlay";
 
 function asStaleCache(value: MarketRecord | undefined, instrument: Instrument | undefined): MarketRecord | null {
   if (!value || !instrument || !isValidMarketRecord(value, instrument)) return null;
@@ -72,6 +73,26 @@ export default function App() {
   }), [portfolio, records]);
   const summary = useMemo(() => calculatePortfolioSummary(positions, portfolio.baseCurrency), [positions, portfolio.baseCurrency]);
   const selected = positions.find((position) => position.instrument.id === selectedId) ?? null;
+
+  const closePurchase = useCallback(() => {
+    setPurchaseOpen(false);
+    if (window.history.state?.[OVERLAY_STATE] === "purchase") window.history.back();
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    setSelectedId(null);
+    if (window.history.state?.[OVERLAY_STATE] === "detail") window.history.back();
+  }, []);
+
+  function openPurchase() {
+    window.history.pushState({ ...(window.history.state ?? {}), [OVERLAY_STATE]: "purchase" }, "", window.location.href);
+    setPurchaseOpen(true);
+  }
+
+  function openDetail(instrumentId: string) {
+    window.history.pushState({ ...(window.history.state ?? {}), [OVERLAY_STATE]: "detail" }, "", window.location.href);
+    setSelectedId(instrumentId);
+  }
 
   function persist(next: PortfolioDocument) { setPortfolio(browserStorage.savePortfolio(next)); }
 
@@ -132,10 +153,27 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    // A same-URL history entry lets iOS/Android browser Back close a sheet
+    // before the browser leaves the installed site.
+    const currentState = window.history.state ?? {};
+    if (currentState[OVERLAY_STATE]) {
+      const { [OVERLAY_STATE]: _overlay, ...rest } = currentState;
+      void _overlay;
+      window.history.replaceState(rest, "", window.location.href);
+    }
+    const onPopState = () => {
+      setPurchaseOpen(false);
+      setSelectedId(null);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   function addLot(instrument: Instrument, lot: PurchaseLot) {
     const exists = portfolio.instruments.some((item) => item.id === instrument.id);
     persist({ ...portfolio, instruments: exists ? portfolio.instruments : [...portfolio.instruments, instrument], lots: [...portfolio.lots, lot] });
-    setPurchaseOpen(false); setNotice(`${instrument.ticker} purchase added.`);
+    closePurchase(); setNotice(`${instrument.ticker} purchase added.`);
   }
 
   function saveLot(lot: PurchaseLot) { persist({ ...portfolio, lots: portfolio.lots.map((item) => item.id === lot.id ? lot : item) }); }
@@ -144,7 +182,7 @@ export default function App() {
     const lots = portfolio.lots.filter((item) => item.id !== lot.id);
     const wasFinalLot = !lots.some((item) => item.instrumentId === lot.instrumentId);
     persist({ ...portfolio, instruments: wasFinalLot ? portfolio.instruments.filter((item) => item.id !== lot.instrumentId) : portfolio.instruments, lots });
-    if (wasFinalLot) setSelectedId(null);
+    if (wasFinalLot) closeDetail();
   }
   function deleteHolding(position: PositionMetrics) {
     if (!window.confirm(`Delete ${position.instrument.ticker} and all ${position.lots.length} orders? This cannot be undone.`)) return;
@@ -170,19 +208,19 @@ export default function App() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#main">Skip to portfolio</a>
-    <header className="topbar"><a className="brand" href="./" aria-label="ETF Portfolio Tracker home"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="ETF Portfolio Tracker" /></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> <span>Settings</span></button><button className="button primary add-purchase" aria-label="Add Purchase" onClick={() => setPurchaseOpen(true)}><Plus /> <span className="desktop-label">Add Purchase</span><span className="mobile-label">Add</span></button></nav></header>
+    <header className="topbar"><a className="brand" href="./" aria-label="ETF Portfolio Tracker home"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="ETF Portfolio Tracker" /></a><nav aria-label="Portfolio actions"><button className="button ghost" onClick={() => setSettingsOpen(true)}><Settings /> <span>Settings</span></button><button className="button primary add-purchase" aria-label="Add Purchase" onClick={openPurchase}><Plus /> <span className="desktop-label">Add Purchase</span><span className="mobile-label">Add</span></button></nav></header>
     {!navigator.onLine && <div className="global-banner" role="status">You are offline. The last saved market update may still be available.</div>}
     {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}><X aria-hidden="true" /></button></div>}
     <main id="main">
-      <div className="page-heading"><div><p className="eyebrow">Private - Local to This Browser</p><h1>Portfolio Dashboard</h1></div><button className="button secondary" onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> {loading.size ? "Refreshing…" : "Refresh Prices"}</button></div>
+      <div className="page-heading"><div><p className="eyebrow">Private - Local to This Browser</p><h1>Portfolio Dashboard</h1></div><button className="button secondary refresh-button" aria-label={loading.size ? "Refreshing Prices" : "Refresh Prices"} onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> <span>{loading.size ? "Refreshing…" : "Refresh Prices"}</span></button></div>
       <SummaryCards summary={summary} positions={positions} />
-      {!positions.length ? <section className="empty-state"><div className="empty-icon"><ChartNoAxesCombined /></div><p className="eyebrow">Get Started</p><h2>Build Your Portfolio</h2><p>Add a purchase or import your portfolio JSON file to begin tracking your investments.</p><div><button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => setSelectedId(position.instrument.id)} onDelete={deleteHolding} />}
+      {!positions.length ? <section className="empty-state"><div className="empty-icon"><ChartNoAxesCombined /></div><p className="eyebrow">Get Started</p><h2>Build Your Portfolio</h2><p>Add a purchase or import your portfolio JSON file to begin tracking your investments.</p><div><button className="button primary" onClick={openPurchase}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} onSelect={(position) => openDetail(position.instrument.id)} onDelete={deleteHolding} />}
       <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local Data</p><h2 id="data-title">Import, Export and Recovery</h2><p>Exports contain instruments and orders only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear Portfolio</button></div></section>
     </main>
     <footer className="site-footer"><p><ShieldCheck aria-hidden="true" /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
-    {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} onSave={addLot} />}
+    {purchaseOpen && <PurchaseDialog onClose={closePurchase} onSave={addLot} />}
     {settingsOpen && <SettingsDialog value={settings} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />}
-    {selected && <DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={() => setSelectedId(null)} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} />}
+    {selected && <DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={closeDetail} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} />}
     {importPreview && <ImportPreviewDialog portfolio={importPreview} onCancel={() => setImportPreview(null)} onApply={applyImport} />}
   </div>;
 }

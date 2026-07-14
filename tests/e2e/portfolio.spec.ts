@@ -24,12 +24,18 @@ test.beforeEach(async ({ page }) => {
 
 test("shows valued summary, holding and accessible detail", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("1 of 1 EUR positions valued")).toBeVisible();
+  await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Holdings" })).toBeVisible();
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
-  await page.getByRole("button", { name: "Edit order from 2026-01-02" }).click();
+  const desktopEdit = page.getByRole("button", { name: "Edit order from 2026-01-02" });
+  if (await desktopEdit.isVisible()) {
+    await desktopEdit.click();
+  } else {
+    await page.getByLabel("Order actions for 2026-01-02").click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+  }
   await expect(page.getByRole("dialog", { name: "Edit Order" })).toBeVisible();
   await expect(page.getByLabel("Shares")).toBeFocused();
   await page.keyboard.press("Escape");
@@ -51,11 +57,24 @@ test("loads a distinct one-year series and compares value after the first order"
   await page.goto("/");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
   await page.getByRole("button", { name: "1Y" }).click();
-  await expect(page.getByRole("img", { name: "Historical market price chart with 3 data points" })).toBeVisible();
+  const priceChart = page.getByRole("img", { name: "Historical market price chart with 3 data points and average buy price baseline" });
+  await expect(priceChart).toBeVisible();
+  await expect(page.getByText(/Average Buy €76.80/)).toBeVisible();
+  await priceChart.scrollIntoViewIfNeeded();
+  const chartBox = await priceChart.boundingBox();
+  expect(chartBox).not.toBeNull();
+  await page.mouse.move(chartBox!.x + chartBox!.width * .65, chartBox!.y + chartBox!.height * .55);
+  const tooltip = page.locator(".chart-tooltip");
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Price");
+  await expect(tooltip).toContainText("Holding Value");
+  await expect(tooltip).toContainText("Change");
   await expect(page.getByRole("dialog").getByText("€80.00", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Value vs Invested" }).click();
-  await expect(page.getByRole("img", { name: "Historical position value and invested cost chart with 2 data points" })).toBeVisible();
+  await page.getByRole("button", { name: "Holding Value" }).click();
+  await expect(page.getByRole("img", { name: "Historical holding value and invested cost chart with 2 data points" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Holding Value vs Invested Cost" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  await expect(page.getByText("1 Order")).toBeVisible();
 });
 
 test("keeps data actions equal and instrument marks contained", async ({ page }) => {
@@ -65,8 +84,8 @@ test("keeps data actions equal and instrument marks contained", async ({ page })
   const widths = await Promise.all(actions.map(async (action) => (await action.boundingBox())?.width ?? 0));
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2);
 
-  const tile = await page.locator(".instrument-logo").first().boundingBox();
-  const mark = await page.locator(".instrument-logo img").first().boundingBox();
+  const tile = await page.locator(".instrument-logo:visible").first().boundingBox();
+  const mark = await page.locator(".instrument-logo:visible img").first().boundingBox();
   expect(tile).not.toBeNull();
   expect(mark).not.toBeNull();
   expect(mark!.width).toBeLessThanOrEqual(tile!.width);
@@ -98,8 +117,8 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(toastClose!.width).toBeGreaterThanOrEqual(44);
   expect(toastClose!.height).toBeGreaterThanOrEqual(44);
 
-  const logoTile = await page.locator(".instrument-logo").first().boundingBox();
-  const logoMark = await page.locator(".instrument-logo img").first().boundingBox();
+  const logoTile = await page.locator(".instrument-logo:visible").first().boundingBox();
+  const logoMark = await page.locator(".instrument-logo:visible img").first().boundingBox();
   expect(logoTile).not.toBeNull();
   expect(logoMark).not.toBeNull();
   expect(logoMark!.width / logoTile!.width).toBeGreaterThan(.96);
@@ -109,7 +128,7 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   await expect(page.getByText(/Manual Price Fallback/i)).toHaveCount(0);
 
-  for (const name of ["Price", "Value vs Invested", "1D", "1W", "1M", "3M", "1Y", "MAX"]) {
+  for (const name of ["Price", "Holding Value", "1D", "1W", "1M", "3M", "1Y", "MAX"]) {
     const control = await page.getByRole("button", { name, exact: true }).boundingBox();
     expect(control).not.toBeNull();
     expect(control!.height).toBeGreaterThanOrEqual(44);
@@ -145,6 +164,51 @@ test("shows an explicit rate-limit error without inventing a price", async ({ pa
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, json: { error: "daily request allowance reached" } }));
   await page.goto("/");
-  await expect(page.getByText(/Market Data Unavailable - Rate limit reached/)).toBeVisible();
-  await expect(page.getByText("0 of 1 EUR positions valued")).toBeVisible();
+  await expect(page.locator(".status.unavailable:visible").first()).toBeVisible();
+  await expect(page.locator(".fallback-reason:visible").first()).toContainText("Rate limit reached");
+  await expect(page.getByLabel("0 of 1 EUR positions valued")).toBeVisible();
+});
+
+test("filters and searches holdings from the compact toolbar", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await expect(page.getByPlaceholder("Search holdings")).toBeVisible();
+  await expect(page.locator("#holdings-sort")).toHaveValue("value");
+  await page.getByRole("button", { name: "Losers" }).click();
+  await expect(page.getByText("No holdings match these filters.")).toBeVisible();
+  await page.getByRole("button", { name: "Gainers" }).click();
+  await expect(page.locator(".holding-card:visible").getByText("JEDI", { exact: true })).toBeVisible();
+  await page.getByPlaceholder("Search holdings").fill("missing ticker");
+  await expect(page.getByText("No holdings match these filters.")).toBeVisible();
+});
+
+test("browser back closes detail and purchase sheets before leaving dashboard", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const dashboardUrl = page.url();
+
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await expect(page.getByRole("dialog", { name: /JEDI/ })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("dialog", { name: /JEDI/ })).toBeHidden();
+  expect(page.url()).toBe(dashboardUrl);
+
+  await page.getByRole("button", { name: "Add Purchase" }).click();
+  await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeHidden();
+  expect(page.url()).toBe(dashboardUrl);
+});
+
+test("uses mobile order cards without horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+
+  await expect(page.getByText("1 Order")).toBeVisible();
+  await expect(page.getByLabel("Order actions for 2026-01-02")).toBeVisible();
+  await expect(page.locator(".order-card:visible").getByText("Purchase Price", { exact: true })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBe(0);
 });

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChartNoAxesCombined, Pencil, RefreshCw, Trash2, WalletCards, X } from "lucide-react";
+import { ChartNoAxesCombined, MoreHorizontal, Pencil, RefreshCw, Trash2, WalletCards, X } from "lucide-react";
 import { calculateAnnualisedYield, calculatePeriodPerformance } from "../domain/portfolio";
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from "../format";
 import { filterHistoryForRange } from "../market/history";
@@ -75,25 +75,29 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
         </div>}
 
         {position.quote && <p className="provenance">Source: {position.quote.source.toUpperCase()} · Data Timestamp: {formatDateTime(position.quote.asOf)} · Fetched: {formatDateTime(position.quote.fetchedAt)} · Venue: {position.quote.exchange}</p>}
-        {instrument.assetType === "FUND" && <p className="fund-note">{position.costBasisWarning ? <><strong>Review Cost Basis:</strong> {position.costBasisWarning}</> : <>Published NAV determines the fund value and return. The displayed annualised yield is recalculated automatically from NAV history whenever market data refreshes; it is not Moneybase's advertised APY.</>}</p>}
+        {instrument.assetType === "FUND" && position.costBasisWarning && <p className="fund-note"><strong>Review Cost Basis:</strong> {position.costBasisWarning}</p>}
         {instrument.assetType === "ETF" && <p className="return-note"><strong>Market Return:</strong> {formatMoney(position.marketReturn, instrument.currency)} before fees · <strong>Net Return:</strong> {formatMoney(position.profitLoss, instrument.currency)} after {formatMoney(position.totalFees, instrument.currency)} fees</p>}
 
         <section className="chart-panel" aria-labelledby="chart-title">
           <div className="chart-toolbar">
-            <div><p className="eyebrow">Performance</p><h3 id="chart-title">{chartMode === "price" ? (instrument.assetType === "FUND" ? "NAV History" : "Market Price History") : "Position Value vs Invested Amount"}</h3></div>
+            <div><p className="eyebrow">Performance</p><h3 id="chart-title">{chartMode === "price" ? (instrument.assetType === "FUND" ? "NAV History" : "Market Price History") : "Holding Value vs Invested Cost"}</h3></div>
             <div className="view-controls" role="group" aria-label="Chart view">
               <button type="button" className={chartMode === "price" ? "active" : ""} aria-pressed={chartMode === "price"} onClick={() => setChartMode("price")}><ChartNoAxesCombined aria-hidden="true" /> {instrument.assetType === "FUND" ? "NAV" : "Price"}</button>
-              <button type="button" className={chartMode === "value" ? "active" : ""} aria-pressed={chartMode === "value"} onClick={() => setChartMode("value")}><WalletCards aria-hidden="true" /> Value vs Invested</button>
+              <button type="button" className={chartMode === "value" ? "active" : ""} aria-pressed={chartMode === "value"} onClick={() => setChartMode("value")}><WalletCards aria-hidden="true" /> Holding Value</button>
             </div>
           </div>
           <div className="range-controls" aria-label="Chart time range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={() => changeRange(item)}>{item}</button>)}</div>
           {instrument.assetType === "FUND" && range === "1D" && <p className="chart-hint">This fund publishes one NAV per trading day, so intraday prices are not available.</p>}
-          {loading ? <div className="chart-empty"><RefreshCw className="spin" aria-hidden="true" /> Loading Historical Data…</div> : <MarketChart history={visibleHistory} lots={position.lots} mode={chartMode} currency={instrument.currency} />}
+          {loading ? <div className="chart-empty"><RefreshCw className="spin" aria-hidden="true" /> Loading Historical Data…</div> : <MarketChart history={visibleHistory} lots={position.lots} mode={chartMode} currency={instrument.currency} averagePurchasePrice={position.averagePurchasePrice} />}
         </section>
 
         <section className="lots-panel" aria-labelledby="lots-title">
-          <div className="section-heading"><div><p className="eyebrow">Cost Basis</p><h3 id="lots-title">Orders</h3></div><strong>{formatNumber(position.totalShares)} Total</strong></div>
-          <div className="compact-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{lot.purchaseDate}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit order from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete order from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
+          <div className="section-heading"><div><p className="eyebrow">Cost Basis</p><h3 id="lots-title">Orders</h3></div><strong>{position.lots.length} {position.lots.length === 1 ? "Order" : "Orders"}</strong></div>
+          <div className="compact-table orders-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{lot.purchaseDate}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit order from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete order from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
+          <div className="order-cards">{position.lots.map((lot) => <article className="order-card" key={lot.id}>
+            <header><div><span>Date</span><strong>{lot.purchaseDate}</strong></div><details className="order-menu"><summary aria-label={`Order actions for ${lot.purchaseDate}`}><MoreHorizontal aria-hidden="true" /></summary><div><button type="button" onClick={() => setEditing(lot)}><Pencil aria-hidden="true" /> Edit</button><button type="button" className="danger" onClick={() => onLotDelete(lot)}><Trash2 aria-hidden="true" /> Delete</button></div></details></header>
+            <dl><div><dt>Shares</dt><dd>{formatNumber(lot.shares)}</dd></div><div><dt>Purchase Price</dt><dd>{formatMoney(lot.pricePerShare, instrument.currency)}</dd></div><div><dt>Fees</dt><dd>{formatMoney(lot.fees, instrument.currency)}</dd></div><div className="order-total"><dt>Total Cost</dt><dd>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</dd></div></dl>
+          </article>)}</div>
         </section>
 
       </div>

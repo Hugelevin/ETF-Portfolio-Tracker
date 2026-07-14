@@ -25,6 +25,7 @@ test.beforeEach(async ({ page }) => {
 test("shows valued summary, holding and accessible detail", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
+  await expect(page.locator(".summary")).not.toHaveClass(/loss/);
   await expect(page.getByRole("heading", { name: "Holdings" })).toBeVisible();
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
@@ -186,8 +187,12 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   await expect(page.getByRole("img", { name: /JEDI 7-day price trend/ })).toBeVisible();
   const sparkline = await page.locator(".holding-sparkline svg").boundingBox();
   expect(sparkline).not.toBeNull();
-  expect(sparkline!.width).toBeGreaterThan(120);
-  expect(sparkline!.height).toBeGreaterThanOrEqual(58);
+  expect(sparkline!.width).toBeGreaterThanOrEqual(140);
+  expect(sparkline!.height).toBeGreaterThanOrEqual(64);
+  const holdingPriceSize = await page.locator(".holding-value").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+  expect(holdingPriceSize).toBeLessThanOrEqual(29);
+  await expect(page.locator(".holding-card")).toContainText("|");
+  await expect(page.locator(".holding-card")).not.toContainText("·");
   const holdingNameStyle = await page.locator(".card-instrument small").evaluate((element) => {
     const style = getComputedStyle(element);
     return { whiteSpace: style.whiteSpace, textOverflow: style.textOverflow };
@@ -209,6 +214,49 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBe(0);
+});
+
+test("uses a loss theme when the portfolio daily return is negative", async ({ page }) => {
+  await page.unroute("http://market.test/yahoo/chart**");
+  await page.route("http://market.test/yahoo/chart**", async (route) => {
+    const timestamps = [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
+    await route.fulfill({ json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 80 }, timestamp: timestamps, indicators: { quote: [{ close: [79, 78] }] } }] } } });
+  });
+  await page.goto("/");
+  await expect(page.locator(".summary")).toHaveClass(/loss/);
+});
+
+test("does not leave a trailing hyphen in the UMMEPSA card name", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fundPortfolio = {
+    schemaVersion: 1,
+    baseCurrency: "EUR",
+    instruments: [{ id: "ummepsa-moneybase-eur", name: "UBS (Irl) Select Money Market Fund - EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", micCode: "FUND", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" }],
+    lots: [{ id: "fund-lot", instrumentId: "ummepsa-moneybase-eur", shares: 10, pricePerShare: 106, purchaseDate: "2026-01-02", fees: 0 }],
+  };
+  await page.addInitScript((portfolio) => localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify(portfolio)), fundPortfolio);
+  await page.goto("/");
+  const name = await page.locator(".holding-card .card-instrument small").innerText();
+  expect(name).not.toMatch(/\s-\s*$/);
+});
+
+test("does not draw black chart boxes during pointer interaction", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  const chart = page.getByRole("img", { name: "Historical market price chart with 2 data points" });
+  const box = await chart.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width * .65, box!.y + box!.height * .5);
+  await page.mouse.click(box!.x + box!.width * .65, box!.y + box!.height * .5);
+  const blackBoxStyles = await page.locator(".chart .recharts-wrapper").evaluate((wrapper) => {
+    const elements = [wrapper, ...wrapper.querySelectorAll("svg, rect, path")];
+    return elements.map((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return { outline: style.outline, stroke: style.stroke, fill: style.fill, border: style.border, width: rect.width, height: rect.height };
+    }).filter((item) => (item.outline.includes("rgb(0, 0, 0)") || item.stroke === "rgb(0, 0, 0)" || item.fill === "rgb(0, 0, 0)" || item.border.includes("rgb(0, 0, 0)")) && item.width > 200 && item.height > 100);
+  });
+  expect(blackBoxStyles).toEqual([]);
 });
 
 test("does not overflow on the narrowest supported phone", async ({ page }) => {

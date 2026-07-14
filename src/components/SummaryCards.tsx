@@ -8,7 +8,7 @@ export function SummaryCards({ summary, positions, updatedAt }: { summary: Portf
   const incomplete = summary.pricedPositions !== summary.totalPositions;
   const missing = positions.filter((position) => summary.missingPricePositionIds.includes(position.instrument.id));
   const nonEur = positions.filter((position) => summary.nonBaseCurrencyPositionIds.includes(position.instrument.id));
-  return <section className="summary" aria-labelledby="summary-title">
+  return <section className={`summary${summary.dailyChange !== null && summary.dailyChange < 0 ? " loss" : ""}`} aria-labelledby="summary-title">
     <div className="summary-heading">
       <div><p className="eyebrow">Portfolio Overview</p><h2 id="summary-title">Your EUR Portfolio</h2></div>
       <div className="summary-status"><span className={`coverage ${incomplete ? "warning" : ""}`} aria-label={`${summary.pricedPositions} of ${summary.baseCurrencyPositions} EUR positions valued`}>{summary.pricedPositions}/{summary.baseCurrencyPositions} Priced{nonEur.length ? ` · ${nonEur.length} Non-EUR` : ""}</span><small>{formatUpdateAge(updatedAt)}</small></div>

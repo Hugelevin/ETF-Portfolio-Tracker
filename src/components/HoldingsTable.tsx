@@ -12,7 +12,7 @@ type ReturnFilter = "all" | "gainers" | "losers";
 
 function compactName(name: string) {
   return name
-    .replace(/\s+[—-]\s+Accumulating$/i, "")
+    .replace(/\s+[—-]\s+(?:Accumulating|EUR P Acc)$/i, "")
     .replace(/\s+UCITS ETF$/i, "")
     .replace(/\s+ETF$/i, "")
     .replace(/\s+EUR P Acc$/i, "")
@@ -56,12 +56,12 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
           <span className="sr-only">Open {position.instrument.ticker} details: </span>
           <span className="holding-performance">
             <strong className="holding-value">{position.currentValue === null ? "Unavailable" : formatMoney(position.currentValue, position.instrument.currency)}</strong>
-            <span className={`return-chip ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}<span className="change-separator" aria-hidden="true">·</span><span>{formatPercent(position.marketReturnPercentage)}</span></span>
-            <span className={`holding-today ${direction(position.dailyChange)}`}>Today {formatMoney(position.dailyChange, position.instrument.currency)}<span className="change-separator" aria-hidden="true">·</span><span>{formatPercent(position.dailyChangePercentage)}</span></span>
+            <span className={`return-chip ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}<span className="change-separator" aria-hidden="true">|</span><span>{formatPercent(position.marketReturnPercentage)}</span></span>
+            <span className={`holding-today ${direction(position.dailyChange)}`}>Today {formatMoney(position.dailyChange, position.instrument.currency)}<span className="change-separator" aria-hidden="true">|</span><span>{formatPercent(position.dailyChangePercentage)}</span></span>
           </span>
           <HoldingSparkline history={sparklineHistory(position.instrument.id)} ticker={position.instrument.ticker} />
         </button>
-        <footer><span>{formatNumber(position.totalShares)} shares <b>·</b> {position.quote ? `${formatMoney(position.quote.price, position.instrument.currency)} each` : "price unavailable"}</span><button type="button" onClick={() => onSelect(position)}>Details <ChevronRight aria-hidden="true" /></button></footer>
+        <footer><span>{formatNumber(position.totalShares)} shares <b>|</b> {position.quote ? `${formatMoney(position.quote.price, position.instrument.currency)} each` : "price unavailable"}</span><button type="button" onClick={() => onSelect(position)}>Details <ChevronRight aria-hidden="true" /></button></footer>
       </article>)}</div>
       : <div className="table-shell holdings-desktop"><table>
         <thead><tr><th scope="col">Instrument</th><th scope="col">Shares</th><th scope="col">Price</th><th scope="col">Invested</th><th scope="col">Value</th><th scope="col">Market Return</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>

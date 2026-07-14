@@ -36,6 +36,8 @@ main { max-width: 1480px; margin: 0 auto; padding: 3rem max(clamp(1rem, 4vw, 4re
 .page-heading p:last-child { color: var(--muted); margin-bottom: 0; }
 .eyebrow { color: var(--green); text-transform: uppercase; letter-spacing: .13em; font-size: .72rem; font-weight: 800; margin-bottom: .45rem; }
 .summary { background: linear-gradient(135deg, #103d34, #1d5a4f); color: #fff; border: 1px solid rgba(4,41,33,.16); border-radius: 20px; padding: clamp(1rem, 2vw, 1.5rem); box-shadow: 0 14px 36px rgba(19,61,53,.18); }
+.summary.loss { background: linear-gradient(135deg, #581b1b, #8a3030); border-color: rgba(73,12,12,.24); box-shadow: 0 14px 36px rgba(98,28,28,.2); }
+.summary.loss .summary-heading .eyebrow, .summary.loss .summary-status small, .summary.loss .metric-card small { color: #f5dada; }
 .summary-heading, .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; }
 .summary-heading h2 { margin-bottom: 0; font-size: clamp(1.3rem, 3vw, 1.75rem); }
 .summary-heading .eyebrow { color: #d2eee7; }
@@ -105,18 +107,18 @@ td > strong, td > small { display: block; }
 .holding-menu button:hover, .order-menu button:hover { background: #f1f5f3; }
 .holding-menu button svg, .order-menu button svg { width: 17px; height: 17px; }
 .holding-menu button, .order-menu button.danger { color: var(--red); }
-.holding-overview { width: 100%; min-height: 100px; padding: .55rem 0 .45rem; display: grid; grid-template-columns: minmax(0,1fr) clamp(116px, 36vw, 148px); align-items: center; gap: .65rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
+.holding-overview { width: 100%; min-height: 108px; padding: .55rem 0 .45rem; display: grid; grid-template-columns: minmax(0,1fr) clamp(132px, 40vw, 168px); align-items: center; gap: .65rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .holding-performance { min-width: 0; display: grid; justify-items: start; gap: .38rem; }
-.holding-value { font-size: clamp(1.65rem, 8vw, 2rem); line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.holding-value { font-size: clamp(1.45rem, 7vw, 1.75rem); line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .return-chip { display: inline-flex; align-items: center; gap: .32rem; padding: .3rem .48rem; border-radius: 8px; font-size: .78rem; font-weight: 800; }
 .return-chip.positive { background: #e4f4ec; }
 .return-chip.negative { background: var(--red-soft); }
 .return-chip.neutral { color: var(--muted); background: #eef2f0; }
 .holding-today { display: inline-flex; align-items: center; gap: .32rem; font-size: .75rem; font-weight: 700; }
 .change-separator { padding-inline: .08rem; color: currentColor; opacity: .55; }
-.holding-sparkline { min-width: 0; height: 76px; display: grid; grid-template-rows: auto 1fr; gap: .15rem; color: var(--muted); }
+.holding-sparkline { min-width: 0; height: 84px; display: grid; grid-template-rows: auto 1fr; gap: .15rem; color: var(--muted); }
 .holding-sparkline > span { justify-self: end; font-size: .7rem; font-weight: 800; letter-spacing: .08em; }
-.holding-sparkline svg { width: 100%; height: 58px; overflow: visible; }
+.holding-sparkline svg { width: 100%; height: 66px; overflow: visible; }
 .holding-sparkline.empty { place-items: end; align-content: center; }
 .holding-sparkline.empty small { font-size: .7rem; }
 .holding-card > footer { min-height: 40px; padding-top: .3rem; display: flex; align-items: center; justify-content: space-between; gap: .45rem; border-top: 1px solid #e8eeeb; color: var(--muted); font-size: .75rem; }
@@ -260,6 +262,9 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .range-controls button { min-width: 44px; min-height: 44px; border: 0; background: transparent; border-radius: 7px; font-weight: 750; color: var(--muted); }
 .range-controls button.active { color: var(--green-dark); background: #fff; box-shadow: 0 2px 7px rgba(26,61,52,.1); }
 .chart { height: 330px; width: 100%; }
+.chart .recharts-wrapper, .chart .recharts-surface { fill: transparent; }
+.chart .recharts-surface:focus { outline: none; }
+.chart .recharts-surface:focus-visible { outline: 2px solid #74aa9f; outline-offset: -2px; }
 .chart-empty { height: 260px; display: flex; gap: .6rem; align-items: center; justify-content: center; color: var(--muted); background: #fafcfb; border-radius: 10px; }
 .chart-skeleton { background: linear-gradient(100deg,#f6f9f8 20%,#edf3f0 40%,#f6f9f8 60%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
 .chart-hint { color: var(--muted); font-size: .75rem; margin: -.35rem 0 .7rem; }

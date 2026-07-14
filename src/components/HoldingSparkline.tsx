@@ -17,8 +17,8 @@ export function HoldingSparkline({ history, ticker }: Props) {
     </span>;
   }
 
-  const width = 132;
-  const height = 58;
+  const width = 156;
+  const height = 66;
   const inset = 3;
   const values = points.map((point) => point.close);
   const minimum = Math.min(...values);

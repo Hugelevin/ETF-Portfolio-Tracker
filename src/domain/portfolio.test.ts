@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPositionValueHistory,
+  buildPortfolioValueHistory,
   calculateAnnualisedYield,
   calculateChartDomain,
   calculatePeriodPerformance,
   calculatePortfolioSummary,
   calculatePosition,
+  downsamplePoints,
 } from "./portfolio";
 import type { Instrument, MarketQuote, PurchaseLot } from "../types";
 
@@ -252,6 +254,61 @@ describe("buildPositionValueHistory", () => {
     expect(domain[0]).toBeGreaterThan(900);
     expect(domain[0]).toBeLessThanOrEqual(1_000);
     expect(domain[1]).toBeGreaterThanOrEqual(1_120);
+  });
+});
+
+describe("buildPortfolioValueHistory", () => {
+  it("combines complete histories and excludes broker fees from invested capital", () => {
+    const secondInstrument = { ...instrument, id: "second", ticker: "TWO" };
+    const positions = [
+      calculatePosition(instrument, [{ id: "one", instrumentId: instrument.id, shares: 2, pricePerShare: 10, purchaseDate: "2026-01-01", fees: 5 }], quote),
+      calculatePosition(secondInstrument, [{ id: "two", instrumentId: secondInstrument.id, shares: 1, pricePerShare: 20, purchaseDate: "2026-01-02", fees: 3 }], { ...quote, instrumentId: secondInstrument.id }),
+    ];
+
+    const history = buildPortfolioValueHistory(positions, {
+      [instrument.id]: [
+        { timestamp: "2026-01-01T16:00:00Z", close: 11 },
+        { timestamp: "2026-01-02T16:00:00Z", close: 12 },
+      ],
+      [secondInstrument.id]: [{ timestamp: "2026-01-02T16:00:00Z", close: 25 }],
+    });
+
+    expect(history).toEqual([
+      { timestamp: "2026-01-01T12:00:00.000Z", investedValue: 20, marketValue: 22, pricedPositions: 1 },
+      { timestamp: "2026-01-02T12:00:00.000Z", investedValue: 40, marketValue: 49, pricedPositions: 2 },
+    ]);
+  });
+
+  it("omits dates where an owned position has no usable historical price", () => {
+    const secondInstrument = { ...instrument, id: "second", ticker: "TWO" };
+    const positions = [
+      calculatePosition(instrument, [{ id: "one", instrumentId: instrument.id, shares: 1, pricePerShare: 10, purchaseDate: "2026-01-01", fees: 0 }], quote),
+      calculatePosition(secondInstrument, [{ id: "two", instrumentId: secondInstrument.id, shares: 1, pricePerShare: 20, purchaseDate: "2026-01-01", fees: 0 }], { ...quote, instrumentId: secondInstrument.id }),
+    ];
+    expect(buildPortfolioValueHistory(positions, {
+      [instrument.id]: [{ timestamp: "2026-01-01T16:00:00Z", close: 11 }],
+      [secondInstrument.id]: [],
+    })).toEqual([]);
+  });
+
+  it("excludes non-base-currency positions from combined history", () => {
+    const usdInstrument = { ...instrument, id: "usd", ticker: "USD", currency: "USD" };
+    const eurPosition = calculatePosition(instrument, [{ id: "eur", instrumentId: instrument.id, shares: 1, pricePerShare: 10, purchaseDate: "2026-01-01", fees: 0 }], quote);
+    const usdPosition = calculatePosition(usdInstrument, [{ id: "usd", instrumentId: usdInstrument.id, shares: 5, pricePerShare: 100, purchaseDate: "2026-01-01", fees: 0 }], { ...quote, instrumentId: usdInstrument.id, currency: "USD" });
+    expect(buildPortfolioValueHistory([eurPosition, usdPosition], {
+      [instrument.id]: [{ timestamp: "2026-01-01T16:00:00Z", close: 11 }],
+      [usdInstrument.id]: [{ timestamp: "2026-01-01T16:00:00Z", close: 200 }],
+    }, "EUR")).toEqual([{ timestamp: "2026-01-01T12:00:00.000Z", investedValue: 10, marketValue: 11, pricedPositions: 1 }]);
+  });
+});
+
+describe("downsamplePoints", () => {
+  it("limits visual points while retaining both endpoints", () => {
+    const points = Array.from({ length: 195 }, (_, index) => index);
+    const sampled = downsamplePoints(points, 90);
+    expect(sampled).toHaveLength(90);
+    expect(sampled[0]).toBe(0);
+    expect(sampled.at(-1)).toBe(194);
   });
 });
 

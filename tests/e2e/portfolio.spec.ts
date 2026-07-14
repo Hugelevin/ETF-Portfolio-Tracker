@@ -80,9 +80,10 @@ test("loads a distinct one-year series and compares value after the first order"
   await expect(page.getByText("1 Order")).toBeVisible();
 });
 
-test("keeps data actions equal and instrument marks contained", async ({ page }) => {
+test("keeps settings data actions equal and instrument marks contained", async ({ page }) => {
   await page.goto("/");
-  const actions = await page.locator(".data-tools .tool-actions .button").all();
+  await page.getByRole("button", { name: "Settings" }).click();
+  const actions = await page.locator(".settings-data-actions .button").all();
   expect(actions).toHaveLength(3);
   const widths = await Promise.all(actions.map(async (action) => (await action.boundingBox())?.width ?? 0));
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2);
@@ -95,6 +96,34 @@ test("keeps data actions equal and instrument marks contained", async ({ page })
   expect(mark!.height).toBeLessThanOrEqual(tile!.height);
   expect(mark!.width / tile!.width).toBeGreaterThan(.8);
   expect(mark!.height / tile!.height).toBeGreaterThan(.8);
+});
+
+test("uses the exact weekly series for the initial dashboard sparklines", async ({ page }) => {
+  const request = page.waitForRequest((candidate) => candidate.url().includes("/yahoo/chart"));
+  await page.goto("/");
+  expect(new URL((await request).url()).searchParams.get("range")).toBe("5d");
+});
+
+test("loads the installed application shell while offline", async ({ page, context }) => {
+  await page.goto("/");
+  await page.waitForFunction(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) return false;
+    const keys = await caches.keys();
+    for (const key of keys) {
+      const cache = await caches.open(key);
+      if ((await cache.keys()).some((request) => request.url.endsWith(".js"))) return true;
+    }
+    return false;
+  });
+  await context.setOffline(true);
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Portfolio Dashboard" })).toBeVisible();
+    await expect(page.getByText("You are offline.", { exact: false })).toBeVisible();
+  } finally {
+    await context.setOffline(false);
+  }
 });
 
 test("keeps the mobile brand and add action balanced", async ({ page }) => {

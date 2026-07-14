@@ -35,3 +35,16 @@ export function toLocalIsoDate(date = new Date()): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+export function formatUpdateAge(value: string | null, now = Date.now()): string {
+  if (!value) return "Not Updated";
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "Update Time Unknown";
+  const minutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
+  if (minutes < 1) return "Updated Just Now";
+  if (minutes < 60) return `Updated ${minutes} Min Ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Updated ${hours} Hr Ago`;
+  const days = Math.floor(hours / 24);
+  return `Updated ${days} Day${days === 1 ? "" : "s"} Ago`;
+}

@@ -81,6 +81,10 @@ export interface PositionValuePoint {
   marketValue: number;
 }
 
+export interface PortfolioValuePoint extends PositionValuePoint {
+  pricedPositions: number;
+}
+
 export interface PeriodPerformance {
   value: number;
   percentage: number;
@@ -195,6 +199,62 @@ export function buildPositionValueHistory(
       marketValue: shares * point.close,
     }];
   });
+}
+
+/**
+ * Builds a portfolio-wide history without inventing missing prices. Values are
+ * emitted only when every position owned on that date has a price on or before
+ * that date. Fees stay separate from invested capital, matching the dashboard.
+ */
+export function buildPortfolioValueHistory(
+  positions: PositionMetrics[],
+  histories: Record<string, MarketPoint[]>,
+  baseCurrency = "EUR",
+): PortfolioValuePoint[] {
+  const basePositions = positions.filter((position) => position.instrument.currency === baseCurrency);
+  const dates = [...new Set(Object.values(histories)
+    .flat()
+    .map((point) => point.timestamp.slice(0, 10)))]
+    .sort();
+
+  return dates.flatMap((date): PortfolioValuePoint[] => {
+    let investedValue = 0;
+    let marketValue = 0;
+    let pricedPositions = 0;
+
+    for (const position of basePositions) {
+      const ownedLots = position.lots.filter((lot) => lot.purchaseDate <= date);
+      if (!ownedLots.length) continue;
+      const shares = ownedLots.reduce((sum, lot) => sum + lot.shares, 0);
+      const invested = ownedLots.reduce((sum, lot) => sum + lot.shares * lot.pricePerShare, 0);
+      const price = (histories[position.instrument.id] ?? [])
+        .filter((point) => point.timestamp.slice(0, 10) <= date)
+        .at(-1)?.close;
+      if (!Number.isFinite(price) || price == null || price <= 0) return [];
+      investedValue += invested;
+      marketValue += shares * price;
+      pricedPositions += 1;
+    }
+
+    if (pricedPositions === 0) return [];
+    return [{
+      timestamp: `${date}T12:00:00.000Z`,
+      investedValue,
+      marketValue,
+      pricedPositions,
+    }];
+  });
+}
+
+/** Keeps chart shape while limiting SVG/DOM work. First and last points stay. */
+export function downsamplePoints<T>(points: T[], maximum = 90): T[] {
+  if (points.length <= maximum || maximum < 2) return points;
+  const sampled: T[] = [];
+  const lastIndex = points.length - 1;
+  for (let index = 0; index < maximum; index += 1) {
+    sampled.push(points[Math.round((index * lastIndex) / (maximum - 1))]!);
+  }
+  return sampled;
 }
 
 export function calculatePortfolioSummary(

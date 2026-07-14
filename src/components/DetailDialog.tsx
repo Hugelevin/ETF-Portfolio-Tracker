@@ -1,15 +1,17 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChartNoAxesCombined, MoreHorizontal, Pencil, RefreshCw, Trash2, WalletCards, X } from "lucide-react";
 import { calculateAnnualisedYield, calculatePeriodPerformance } from "../domain/portfolio";
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } from "../format";
 import { filterHistoryForRange } from "../market/history";
 import type { ChartRange, MarketRecord, PositionMetrics, PurchaseLot } from "../types";
 import { InstrumentLogo } from "./InstrumentLogo";
-import { MarketChart, type ChartMode } from "./MarketChart";
+import type { ChartMode } from "./MarketChart";
 import { StatusBadge } from "./StatusBadge";
 import { useDialogKeyboard } from "./useDialogKeyboard";
+import { useMediaQuery } from "./useMediaQuery";
 
 const ranges: ChartRange[] = ["1D", "1W", "1M", "3M", "1Y", "MAX"];
+const MarketChart = lazy(() => import("./MarketChart").then((module) => ({ default: module.MarketChart })));
 
 interface Props {
   position: PositionMetrics;
@@ -25,6 +27,7 @@ interface Props {
 export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete }: Props) {
   const [range, setRange] = useState<ChartRange>("1M");
   const [chartMode, setChartMode] = useState<ChartMode>("price");
+  const [chartReady, setChartReady] = useState(false);
   const [editing, setEditing] = useState<PurchaseLot | null>(null);
   const keyboard = useDialogKeyboard(onClose, "[aria-label='Close details']");
   const record = getRecord(range);
@@ -41,6 +44,12 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
   const annualisedYield = calculateAnnualisedYield(metricsHistory, 7);
   const visibleHistory = useMemo(() => filterHistoryForRange(history, range), [history, range]);
   const instrument = position.instrument;
+  const mobileOrders = useMediaQuery("(max-width: 767px)");
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setChartReady(true), 150);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   function changeRange(next: ChartRange) {
     setRange(next);
@@ -74,9 +83,8 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           <div><p>Average Purchase Price</p><strong>{formatMoney(position.averagePurchasePrice, instrument.currency)}</strong></div>
         </div>}
 
-        {position.quote && <p className="provenance">Source: {position.quote.source.toUpperCase()} · Data Timestamp: {formatDateTime(position.quote.asOf)} · Fetched: {formatDateTime(position.quote.fetchedAt)} · Venue: {position.quote.exchange}</p>}
+        {position.quote && <details className="market-details"><summary>Market Data Details</summary><dl><div><dt>Source</dt><dd>{position.quote.source.toUpperCase()}</dd></div><div><dt>Data Timestamp</dt><dd>{formatDateTime(position.quote.asOf)}</dd></div><div><dt>Fetched</dt><dd>{formatDateTime(position.quote.fetchedAt)}</dd></div><div><dt>Venue</dt><dd>{position.quote.exchange}</dd></div></dl></details>}
         {instrument.assetType === "FUND" && position.costBasisWarning && <p className="fund-note"><strong>Review Cost Basis:</strong> {position.costBasisWarning}</p>}
-        {instrument.assetType === "ETF" && <p className="return-note"><strong>Market Return:</strong> {formatMoney(position.marketReturn, instrument.currency)} before fees · <strong>Net Return:</strong> {formatMoney(position.profitLoss, instrument.currency)} after {formatMoney(position.totalFees, instrument.currency)} fees</p>}
 
         <section className="chart-panel" aria-labelledby="chart-title">
           <div className="chart-toolbar">
@@ -88,18 +96,20 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           </div>
           <div className="range-controls" aria-label="Chart time range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={() => changeRange(item)}>{item}</button>)}</div>
           {instrument.assetType === "FUND" && range === "1D" && <p className="chart-hint">This fund publishes one NAV per trading day, so intraday prices are not available.</p>}
-          {loading ? <div className="chart-empty"><RefreshCw className="spin" aria-hidden="true" /> Loading Historical Data…</div> : <MarketChart history={visibleHistory} lots={position.lots} mode={chartMode} currency={instrument.currency} averagePurchasePrice={position.averagePurchasePrice} />}
+          {loading ? <div className="chart-empty"><RefreshCw className="spin" aria-hidden="true" /> Loading Historical Data…</div>
+            : !visibleHistory.length ? <div className="chart-empty">{chartMode === "value" ? "No holding value exists in this range because it is before your first purchase." : "Historical market prices are unavailable for this range."}</div>
+              : !chartReady ? <div className="chart-empty chart-skeleton" role="status">Preparing Chart…</div>
+                : <Suspense fallback={<div className="chart-empty chart-skeleton" role="status">Preparing Chart…</div>}><MarketChart history={visibleHistory} lots={position.lots} mode={chartMode} currency={instrument.currency} averagePurchasePrice={position.averagePurchasePrice} /></Suspense>}
         </section>
 
         <section className="lots-panel" aria-labelledby="lots-title">
           <div className="section-heading"><div><p className="eyebrow">Cost Basis</p><h3 id="lots-title">Orders</h3></div><strong className="order-count">{position.lots.length} {position.lots.length === 1 ? "Order" : "Orders"}</strong></div>
-          <div className="compact-table orders-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{formatDate(lot.purchaseDate)}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit order from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete order from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
-          <div className="order-cards">{position.lots.map((lot) => <article className="order-card" key={lot.id}>
+          {!mobileOrders ? <div className="compact-table orders-table"><table><thead><tr><th>Date</th><th>Shares</th><th>Purchase Price</th><th>Broker Fees</th><th>Total Cost</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{position.lots.map((lot) => <tr key={lot.id}><td>{formatDate(lot.purchaseDate)}</td><td>{formatNumber(lot.shares)}</td><td>{formatMoney(lot.pricePerShare, instrument.currency)}</td><td>{formatMoney(lot.fees)}</td><td>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Edit order from ${lot.purchaseDate}`} onClick={() => setEditing(lot)}><Pencil /></button><button className="icon-button danger" aria-label={`Delete order from ${lot.purchaseDate}`} onClick={() => onLotDelete(lot)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
+          : <div className="order-cards">{position.lots.map((lot) => <article className="order-card" key={lot.id}>
             <header><time dateTime={lot.purchaseDate}><CalendarDays aria-hidden="true" /> {formatDate(lot.purchaseDate)}</time><details className="order-menu"><summary aria-label={`Order actions for ${lot.purchaseDate}`}><MoreHorizontal aria-hidden="true" /></summary><div><button type="button" onClick={() => setEditing(lot)}><Pencil aria-hidden="true" /> Edit</button><button type="button" className="danger" onClick={() => onLotDelete(lot)}><Trash2 aria-hidden="true" /> Delete</button></div></details></header>
             <dl><div><dt>Shares</dt><dd>{formatNumber(lot.shares)}</dd></div><div><dt>Each</dt><dd>{formatMoney(lot.pricePerShare, instrument.currency)}</dd></div><div><dt>Fees</dt><dd>{formatMoney(lot.fees)}</dd></div><div className="order-total"><dt>Total</dt><dd>{formatMoney(lot.shares * lot.pricePerShare + lot.fees, instrument.currency)}</dd></div></dl>
-          </article>)}</div>
+          </article>)}</div>}
         </section>
-
       </div>
 
       {editing && <LotEditor lot={editing} onClose={() => setEditing(null)} onSave={(lot) => { onLotSave(lot); setEditing(null); }} />}

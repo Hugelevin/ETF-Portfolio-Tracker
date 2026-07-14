@@ -135,9 +135,12 @@ The application logo, favicon and simplified issuer wordmarks are bundled as SVG
 ## Import, Export and Initial Holdings
 
 - **Add Purchase** records individual lots and combines them into one position.
+- **Portfolio Insights** provides an optional allocation view and complete-coverage portfolio history without cluttering the main dashboard.
 - **Export JSON** includes only the versioned portfolio document.
 - **Import JSON** validates the entire file and shows a replacement preview before changing local data.
 - Deleting a lot, deleting a holding and clearing the portfolio all require confirmation.
+
+Import, export and clear controls are grouped under **Settings**. Provider keys and cached market data are never included in exports.
 
 If UMMEPSA was previously recorded using an estimated cash-balance cost rather than a per-unit NAV purchase price, import the corrected portfolio JSON before using Yahoo NAV. The dashboard blocks an implausible fund return and displays **Review Cost Basis** instead of silently multiplying incompatible values.
 
@@ -188,6 +191,8 @@ For a custom domain hosted at its root, set `VITE_BASE_PATH=/` in an adjusted wo
 ### Add to a phone home screen
 
 After deployment, open the GitHub Pages URL in Safari or Chrome and choose **Add to Home Screen**. The included web-app manifest opens the tracker in a standalone window and retains the same browser-local portfolio data.
+
+After the first successful online visit, the application shell is cached for offline opening. Market prices still require a connection; cached prices remain visibly labelled as cached. A newly deployed version is downloaded in the background and is used on the next visit or refresh.
 
 ## Privacy, backup and recovery
 

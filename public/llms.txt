@@ -1,0 +1,9 @@
+# ETF Portfolio Tracker
+
+ETF Portfolio Tracker is a private, local-first dashboard for tracking EUR-listed UCITS ETF and fund holdings.
+
+Portfolio orders, settings, and cached market data remain in the user's browser. The public site contains no personal portfolio data and provides no investment advice.
+
+## Links
+
+- [Source repository](https://github.com/Hugelevin/ETF-Portfolio-Tracker)

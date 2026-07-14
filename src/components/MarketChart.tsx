@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Table2 } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { buildPositionValueHistory, calculateChartDomain } from "../domain/portfolio";
+import { buildPositionValueHistory, calculateChartDomain, downsamplePoints } from "../domain/portfolio";
 import { formatMoney, formatPercent } from "../format";
 import type { MarketPoint, PurchaseLot } from "../types";
 import { calculatePriceDomain } from "./chartDomain";
@@ -64,6 +64,8 @@ function ChartTooltip({ active, payload, currency, mode }: ChartTooltipProps) {
 }
 
 export function MarketChart({ history, lots, mode, currency, averagePurchasePrice }: Props) {
+  const [tableOpen, setTableOpen] = useState(false);
+  const [visibleRows, setVisibleRows] = useState(50);
   const intraday = useMemo(() => history.some((point, index) => (
     index > 0 && point.timestamp.slice(0, 10) === history[index - 1]?.timestamp.slice(0, 10)
   )), [history]);
@@ -98,6 +100,11 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     });
   }, [history, lots, intraday]);
   const data = mode === "price" ? priceData : valueData;
+  const chartData = useMemo(() => downsamplePoints(data, 90), [data]);
+  useEffect(() => {
+    setTableOpen(false);
+    setVisibleRows(50);
+  }, [history, mode]);
   const domain = useMemo(() => mode === "price"
     ? calculatePriceDomain(priceData)
     : calculateChartDomain(valueData.map((point) => ({ timestamp: point.timestamp, marketValue: point.marketValue ?? 0, investedValue: point.investedValue ?? 0 })), true), [mode, priceData, valueData]);
@@ -121,7 +128,7 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     </div>
     <div className="chart" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 16, right: 12, left: 4, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 12, left: 4, bottom: 0 }}>
           <defs><linearGradient id="marketFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#296f63" stopOpacity={0.28}/><stop offset="100%" stopColor="#296f63" stopOpacity={0.02}/></linearGradient></defs>
           <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dfe7e4" />
           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={36} />
@@ -130,20 +137,20 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
             : new Intl.NumberFormat("en-GB", { notation: "compact" }).format(value)} tickLine={false} axisLine={false} width={58} />
           <Tooltip content={<ChartTooltip currency={currency} mode={mode} />} cursor={{ stroke: "#94aaa4", strokeDasharray: "3 3" }} />
           {mode === "price" ? <>
-            <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={data.length <= 2 ? { r: 3 } : false} />
+            <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={chartData.length <= 2 ? { r: 3 } : false} />
             {averageBuyVisible && <ReferenceLine y={averagePurchasePrice} stroke="#d18b3f" strokeWidth={2} strokeDasharray="6 5" />}
           </> : <>
-            <Area type="monotone" dataKey="marketValue" name="Holding Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={data.length <= 2 ? { r: 3 } : false} />
-            <Line type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={data.length <= 2 ? { r: 3 } : false} />
+            <Area type="monotone" dataKey="marketValue" name="Holding Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={chartData.length <= 2 ? { r: 3 } : false} />
+            <Line type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={chartData.length <= 2 ? { r: 3 } : false} />
           </>}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
-    <details className="data-alternative">
+    <details className="data-alternative" open={tableOpen} onToggle={(event) => setTableOpen(event.currentTarget.open)}>
       <summary><Table2 aria-hidden="true" /><span>View Chart Data as a Table</span><ChevronDown className="data-chevron" aria-hidden="true" /></summary>
-      <div className="compact-table">
-        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
-      </div>
+      {tableOpen && <><div className="compact-table">
+        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
+      </div>{visibleRows < data.length && <button type="button" className="button secondary show-more-data" onClick={() => setVisibleRows((current) => current + 50)}>Show 50 More Rows</button>}</>}
     </details>
   </>;
 }

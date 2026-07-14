@@ -24,6 +24,7 @@ describe("portfolio dashboard", () => {
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Add First Purchase" }));
     const dialog = screen.getByRole("dialog", { name: "Add an Order" });
+    await user.click(within(dialog).getByRole("radio", { name: /ANAU/ }));
     await user.type(within(dialog).getByLabelText("Shares"), "25");
     await user.type(within(dialog).getByLabelText("Purchase Price per Share"), "76.8");
     fireEvent.change(within(dialog).getByLabelText("Purchase Date"), { target: { value: "2026-01-02" } });
@@ -40,6 +41,7 @@ describe("portfolio dashboard", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Load Public Sample" }));
+    await user.click(screen.getByRole("button", { name: "Settings" }));
     await user.click(screen.getByRole("button", { name: "Clear Portfolio" }));
     expect(confirm).toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "Holdings" })).toBeInTheDocument();
@@ -48,6 +50,7 @@ describe("portfolio dashboard", () => {
   it("validates an import and previews replacement before applying it", async () => {
     const user = userEvent.setup();
     render(<App />);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
     const input = screen.getByLabelText("Import JSON");
     const json = JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [], lots: [] });
     const file = new File([json], "portfolio.json", { type: "application/json" });
@@ -82,8 +85,8 @@ describe("portfolio dashboard", () => {
     expect(screen.getAllByText("€82.00").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("1 of 1 EUR positions valued")).toBeInTheDocument();
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
-    const detail = screen.getByRole("dialog", { name: /JEDI/ });
-    expect(screen.getByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
+    const detail = await screen.findByRole("dialog", { name: /JEDI/ });
+    expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
     const metricCount = within(detail).getAllByText("+17.14%").length;
     expect(metricCount).toBeGreaterThan(0);
     await user.click(within(detail).getByRole("button", { name: "1D" }));
@@ -99,9 +102,9 @@ describe("portfolio dashboard", () => {
     render(<App />);
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
 
-    expect(screen.getByRole("heading", { name: "Market Price History" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Market Price History" })).toBeInTheDocument();
     expect(screen.queryByText(/Manual Price Fallback/i)).not.toBeInTheDocument();
-    await user.click(screen.getByText("View Chart Data as a Table"));
+    await user.click(await screen.findByText("View Chart Data as a Table", {}, { timeout: 5_000 }));
     const table = screen.getByRole("table", { name: "Historical market prices" });
     expect(within(table).getByText("€78.00")).toBeInTheDocument();
     expect(within(table).getByText("07 Jul 2026")).toBeInTheDocument();
@@ -116,7 +119,8 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
-    await user.click(screen.getByRole("button", { name: "1Y" }));
+    const detail = screen.getByRole("dialog", { name: /JEDI/ });
+    await user.click(await within(detail).findByRole("button", { name: "1Y" }));
 
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
   });
@@ -198,7 +202,7 @@ describe("portfolio dashboard", () => {
 
     await user.click(screen.getAllByRole("button", { name: "Open UMMEPSA details" })[0]!);
     const dialog = screen.getByRole("dialog", { name: /UMMEPSA/ });
-    expect(within(dialog).getByText("7-Day Annualised NAV Yield")).toBeInTheDocument();
+    expect(await within(dialog).findByText("7-Day Annualised NAV Yield")).toBeInTheDocument();
     expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
     expect(within(dialog).queryByText(/Moneybase's advertised APY/i)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText("APY (%)")).not.toBeInTheDocument();

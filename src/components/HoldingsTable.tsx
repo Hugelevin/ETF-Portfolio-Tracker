@@ -5,9 +5,9 @@ import { formatMoney, formatNumber, formatPercent } from "../format";
 import { HoldingSparkline } from "./HoldingSparkline";
 import { StatusBadge } from "./StatusBadge";
 import { InstrumentLogo } from "./InstrumentLogo";
+import { useMediaQuery } from "./useMediaQuery";
 
 const direction = (value: number | null) => value === null ? "neutral" : value > 0 ? "positive" : value < 0 ? "negative" : "neutral";
-
 type ReturnFilter = "all" | "gainers" | "losers";
 
 function compactName(name: string) {
@@ -31,20 +31,13 @@ interface Props {
 
 export function HoldingsTable({ positions, loading, errors, sparklineHistory, onSelect, onDelete }: Props) {
   const [returnFilter, setReturnFilter] = useState<ReturnFilter>("all");
-
-  const visible = useMemo(() => {
-    return positions
-      .filter((position) => returnFilter === "all" || (returnFilter === "gainers" ? (position.marketReturn ?? 0) > 0 : (position.marketReturn ?? 0) < 0));
-  }, [positions, returnFilter]);
-
+  const mobile = useMediaQuery("(max-width: 700px)");
+  const visible = useMemo(() => positions.filter((position) => returnFilter === "all" || (returnFilter === "gainers" ? (position.marketReturn ?? 0) > 0 : (position.marketReturn ?? 0) < 0)), [positions, returnFilter]);
   const count = visible.length === positions.length ? `${positions.length}` : `${visible.length} of ${positions.length}`;
-  const countLabel = visible.length === positions.length
-    ? `${positions.length} ${positions.length === 1 ? "holding" : "holdings"}`
-    : `${visible.length} of ${positions.length} holdings`;
+  const countLabel = visible.length === positions.length ? `${positions.length} ${positions.length === 1 ? "holding" : "holdings"}` : `${visible.length} of ${positions.length} holdings`;
 
   return <section className="holdings-section" aria-labelledby="holdings-title">
     <div className="section-heading"><div><p className="eyebrow">Positions</p><div className="holdings-title-line"><h2 id="holdings-title">Holdings</h2><span className="holdings-count" aria-label={`${countLabel} shown`}>{count}</span></div></div></div>
-
     <div className="holdings-toolbar" aria-label="Filter holdings">
       <div className="return-filter" role="group" aria-label="Filter by return">
         <button type="button" className={returnFilter === "all" ? "active" : ""} aria-pressed={returnFilter === "all"} onClick={() => setReturnFilter("all")}>All</button>
@@ -52,44 +45,35 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
         <button type="button" className={returnFilter === "losers" ? "active" : ""} aria-pressed={returnFilter === "losers"} onClick={() => setReturnFilter("losers")}><TrendingDown aria-hidden="true" /> Losers</button>
       </div>
     </div>
-
-    {!visible.length ? <div className="holdings-empty" role="status">No holdings match these filters.</div> : <>
-      <div className="table-shell holdings-desktop">
-        <table>
-          <thead><tr><th scope="col">Instrument</th><th scope="col">Shares</th><th scope="col">Price</th><th scope="col">Invested</th><th scope="col">Value</th><th scope="col">Market Return</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
-          <tbody>{visible.map((position) => <tr key={position.instrument.id}>
-            <td><button className="instrument-link" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button></td>
-            <td>{formatNumber(position.totalShares)}</td>
-            <td><strong>{position.quote ? formatMoney(position.quote.price, position.instrument.currency) : "Unavailable"}</strong><StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} /></td>
-            <td>{formatMoney(position.purchaseCostExcludingFees, position.instrument.currency)}</td>
-            <td>{formatMoney(position.currentValue, position.instrument.currency)}</td>
-            <td><span className={`change ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}</span><small>{formatPercent(position.marketReturnPercentage)}</small></td>
-            <td><div className="row-actions"><button className="icon-button" aria-label={`Open ${position.instrument.ticker} details`} onClick={() => onSelect(position)}><ChevronRight /></button><button className="icon-button danger" aria-label={`Delete ${position.instrument.ticker} holding`} onClick={() => onDelete(position)}><Trash2 /></button></div></td>
-          </tr>)}</tbody>
-        </table>
-      </div>
-
-      <div className="holdings-cards">
-        {visible.map((position) => <article className="holding-card" key={position.instrument.id}>
-          <header>
-            <button className="card-instrument" onClick={() => onSelect(position)} title={position.instrument.name}>
-              <InstrumentLogo instrument={position.instrument} />
-              <span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span>
-            </button>
-            <StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} />
-            <details className="holding-menu"><summary aria-label={`More actions for ${position.instrument.ticker}`}><MoreHorizontal aria-hidden="true" /></summary><div><button type="button" onClick={() => onDelete(position)}><Trash2 aria-hidden="true" /> Delete Holding</button></div></details>
-          </header>
-          <button className="holding-overview" onClick={() => onSelect(position)} aria-label={`Open ${position.instrument.ticker} details`}>
-            <span className="holding-performance">
-              <strong className="holding-value">{position.currentValue === null ? "Unavailable" : formatMoney(position.currentValue, position.instrument.currency)}</strong>
-              <span className={`return-chip ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}<span className="change-separator" aria-hidden="true">·</span><span>{formatPercent(position.marketReturnPercentage)}</span></span>
-              <span className={`holding-today ${direction(position.dailyChange)}`}>Today {formatMoney(position.dailyChange, position.instrument.currency)}<span className="change-separator" aria-hidden="true">·</span><span>{formatPercent(position.dailyChangePercentage)}</span></span>
-            </span>
-            <HoldingSparkline history={sparklineHistory(position.instrument.id)} ticker={position.instrument.ticker} />
-          </button>
-          <footer><span>{formatNumber(position.totalShares)} shares <b>·</b> {position.quote ? `${formatMoney(position.quote.price, position.instrument.currency)} each` : "price unavailable"}</span><button type="button" onClick={() => onSelect(position)}>Details <ChevronRight aria-hidden="true" /></button></footer>
-        </article>)}
-      </div>
-    </>}
+    {!visible.length ? <div className="holdings-empty" role="status">No holdings match these filters.</div> : mobile
+      ? <div className="holdings-cards">{visible.map((position) => <article className="holding-card" key={position.instrument.id}>
+        <header>
+          <button className="card-instrument" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button>
+          <StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} />
+          <details className="holding-menu"><summary aria-label={`More actions for ${position.instrument.ticker}`}><MoreHorizontal aria-hidden="true" /></summary><div><button type="button" onClick={() => onDelete(position)}><Trash2 aria-hidden="true" /> Delete Holding</button></div></details>
+        </header>
+        <button className="holding-overview" onClick={() => onSelect(position)}>
+          <span className="sr-only">Open {position.instrument.ticker} details: </span>
+          <span className="holding-performance">
+            <strong className="holding-value">{position.currentValue === null ? "Unavailable" : formatMoney(position.currentValue, position.instrument.currency)}</strong>
+            <span className={`return-chip ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}<span className="change-separator" aria-hidden="true">·</span><span>{formatPercent(position.marketReturnPercentage)}</span></span>
+            <span className={`holding-today ${direction(position.dailyChange)}`}>Today {formatMoney(position.dailyChange, position.instrument.currency)}<span className="change-separator" aria-hidden="true">·</span><span>{formatPercent(position.dailyChangePercentage)}</span></span>
+          </span>
+          <HoldingSparkline history={sparklineHistory(position.instrument.id)} ticker={position.instrument.ticker} />
+        </button>
+        <footer><span>{formatNumber(position.totalShares)} shares <b>·</b> {position.quote ? `${formatMoney(position.quote.price, position.instrument.currency)} each` : "price unavailable"}</span><button type="button" onClick={() => onSelect(position)}>Details <ChevronRight aria-hidden="true" /></button></footer>
+      </article>)}</div>
+      : <div className="table-shell holdings-desktop"><table>
+        <thead><tr><th scope="col">Instrument</th><th scope="col">Shares</th><th scope="col">Price</th><th scope="col">Invested</th><th scope="col">Value</th><th scope="col">Market Return</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+        <tbody>{visible.map((position) => <tr key={position.instrument.id}>
+          <td><button className="instrument-link" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button></td>
+          <td>{formatNumber(position.totalShares)}</td>
+          <td><strong>{position.quote ? formatMoney(position.quote.price, position.instrument.currency) : "Unavailable"}</strong><StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} /></td>
+          <td>{formatMoney(position.purchaseCostExcludingFees, position.instrument.currency)}</td>
+          <td>{formatMoney(position.currentValue, position.instrument.currency)}</td>
+          <td><span className={`change ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}</span><small>{formatPercent(position.marketReturnPercentage)}</small></td>
+          <td><div className="row-actions"><button className="icon-button" aria-label={`Open ${position.instrument.ticker} details`} onClick={() => onSelect(position)}><ChevronRight /></button><button className="icon-button danger" aria-label={`Delete ${position.instrument.ticker} holding`} onClick={() => onDelete(position)}><Trash2 /></button></div></td>
+        </tr>)}</tbody>
+      </table></div>}
   </section>;
 }

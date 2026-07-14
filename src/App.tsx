@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChartNoAxesCombined, Download, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload, X } from "lucide-react";
-import { DetailDialog } from "./components/DetailDialog";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChartNoAxesCombined, Plus, RefreshCw, Settings, ShieldCheck, X } from "lucide-react";
 import { HoldingsTable } from "./components/HoldingsTable";
 import { ImportPreviewDialog } from "./components/ImportPreviewDialog";
 import { PurchaseDialog } from "./components/PurchaseDialog";
+import { PortfolioInsights } from "./components/PortfolioInsights";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SummaryCards } from "./components/SummaryCards";
 import { SAMPLE_PORTFOLIO } from "./config/samplePortfolio";
@@ -14,6 +14,8 @@ import { isValidMarketRecord, resolveMarketData } from "./market/service";
 import type { AppSettings, ChartRange, Instrument, MarketRecord, PortfolioDocument, PositionMetrics, PurchaseLot } from "./types";
 
 const browserStorage = createPortfolioStorage(window.localStorage);
+const loadDetailDialog = () => import("./components/DetailDialog").then((module) => ({ default: module.DetailDialog }));
+const DetailDialog = lazy(loadDetailDialog);
 const cacheKey = (instrumentId: string, range: ChartRange) => `${instrumentId}:${range}`;
 const OVERLAY_STATE = "etfPortfolioOverlay";
 
@@ -62,9 +64,15 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<PortfolioDocument | null>(null);
   const [notice, setNotice] = useState("");
-  const importRef = useRef<HTMLInputElement>(null);
   const latestRequest = useRef<Record<string, number>>({});
   const latestRangeRequest = useRef<Record<string, number>>({});
+  const resumeRefresh = useRef<() => void>(() => undefined);
+
+  useEffect(() => {
+    // Keep the initial bundle small, then warm the detail screen once the dashboard has settled.
+    const timer = window.setTimeout(() => void loadDetailDialog(), 1_500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const positions = useMemo(() => portfolio.instruments.flatMap((instrument): PositionMetrics[] => {
     const lots = portfolio.lots.filter((lot) => lot.instrumentId === instrument.id);
@@ -92,11 +100,13 @@ export default function App() {
   function openDetail(instrumentId: string) {
     window.history.pushState({ ...(window.history.state ?? {}), [OVERLAY_STATE]: "detail" }, "", window.location.href);
     setSelectedId(instrumentId);
+    const instrument = portfolio.instruments.find((item) => item.id === instrumentId);
+    if (instrument && settings.proxyUrl && !chartRecords[cacheKey(instrumentId, "1M")]) void refreshOne(instrument, "1M");
   }
 
   function persist(next: PortfolioDocument) { setPortfolio(browserStorage.savePortfolio(next)); }
 
-  async function refreshOne(instrument: Instrument, range: ChartRange = "1M") {
+  async function refreshOne(instrument: Instrument, range: ChartRange = "1W") {
     const requestId = (latestRequest.current[instrument.id] ?? 0) + 1;
     latestRequest.current[instrument.id] = requestId;
     const selectedCacheKey = cacheKey(instrument.id, range);
@@ -135,16 +145,37 @@ export default function App() {
     }
   }
 
-  async function refreshAll() {
+  async function refreshAll(range: ChartRange = "1W", announce = true) {
     if (!positions.length) return;
-    await Promise.all(positions.map((position) => refreshOne(position.instrument)));
-    setNotice("Market data refresh finished.");
+    await Promise.all(positions.map((position) => refreshOne(position.instrument, range)));
+    if (announce) setNotice("Market data refresh finished.");
   }
 
   useEffect(() => {
     if (settings.proxyUrl && positions.length) void refreshAll();
     // Initial refresh only; subsequent changes have explicit refresh actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  resumeRefresh.current = () => {
+    const timestamps = positions
+      .map((position) => position.quote ? Date.parse(position.quote.fetchedAt) : 0)
+      .filter(Number.isFinite);
+    const oldest = timestamps.length ? Math.min(...timestamps) : 0;
+    const stale = !oldest || Date.now() - oldest > 15 * 60 * 1_000;
+    if (document.visibilityState === "visible" && navigator.onLine && stale && settings.proxyUrl && positions.length && loading.size === 0) {
+      void refreshAll("1W", false);
+    }
+  };
+
+  useEffect(() => {
+    const refreshOnResume = () => resumeRefresh.current();
+    document.addEventListener("visibilitychange", refreshOnResume);
+    window.addEventListener("pageshow", refreshOnResume);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnResume);
+      window.removeEventListener("pageshow", refreshOnResume);
+    };
   }, []);
 
   useEffect(() => {
@@ -195,14 +226,15 @@ export default function App() {
     anchor.href = url; anchor.download = `eur-portfolio-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url);
   }
   async function readImport(file: File) {
-    try { setImportPreview(importPortfolioJson(await file.text())); }
+    try { setImportPreview(importPortfolioJson(await file.text())); setSettingsOpen(false); }
     catch (error) { setNotice(`Import rejected: ${error instanceof Error ? error.message : "invalid JSON"}`); }
-    if (importRef.current) importRef.current.value = "";
   }
   function applyImport() { if (!importPreview) return; persist(importPreview); setImportPreview(null); setRecords({}); setChartRecords({}); setNotice("Portfolio imported. Existing portfolio data was replaced."); }
   function clearPortfolio() {
-    if (!window.confirm("Clear the entire portfolio and cached market data? This cannot be undone.")) return;
+    if (!window.confirm("Clear the entire portfolio and cached market data? This cannot be undone.")) return false;
     browserStorage.clearPortfolio(); const empty: PortfolioDocument = { schemaVersion: 1, baseCurrency: "EUR", instruments: [], lots: [] }; setPortfolio(empty); setRecords({}); setChartRecords({}); setCache({}); setSelectedId(null);
+    setNotice("Portfolio cleared.");
+    return true;
   }
   function saveSettings(next: AppSettings) { browserStorage.saveSettings(next); setSettings(next); setSettingsOpen(false); setNotice("Market-data settings saved."); }
 
@@ -213,14 +245,14 @@ export default function App() {
     {notice && <div className="toast" role="status"><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")}><X aria-hidden="true" /></button></div>}
     <main id="main">
       <div className="page-heading"><div><p className="eyebrow">Private - Local to This Browser</p><h1>Portfolio Dashboard</h1></div><button className="button secondary refresh-button" aria-label={loading.size ? "Refreshing Prices" : "Refresh Prices"} onClick={() => void refreshAll()} disabled={!positions.length || loading.size > 0}><RefreshCw className={loading.size ? "spin" : ""} /> <span>{loading.size ? "Refreshing…" : "Refresh Prices"}</span></button></div>
-      <SummaryCards summary={summary} positions={positions} />
+      <SummaryCards summary={summary} positions={positions} updatedAt={positions.map((position) => position.quote?.fetchedAt).filter((value): value is string => Boolean(value)).sort()[0] ?? null} />
+      {positions.length > 0 && <PortfolioInsights positions={positions} baseCurrency={portfolio.baseCurrency} getRecord={(instrumentId, range) => chartRecords[cacheKey(instrumentId, range)] ?? null} onRange={(range) => void refreshAll(range, false)} />}
       {!positions.length ? <section className="empty-state"><div className="empty-icon"><ChartNoAxesCombined /></div><p className="eyebrow">Get Started</p><h2>Build Your Portfolio</h2><p>Add a purchase or import your portfolio JSON file to begin tracking your investments.</p><div><button className="button primary" onClick={openPurchase}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} sparklineHistory={(instrumentId) => chartRecords[cacheKey(instrumentId, "1W")]?.history ?? chartRecords[cacheKey(instrumentId, "1M")]?.history ?? []} onSelect={(position) => openDetail(position.instrument.id)} onDelete={deleteHolding} />}
-      <section className="data-tools" aria-labelledby="data-title"><div><p className="eyebrow">Local Data</p><h2 id="data-title">Import, Export and Recovery</h2><p>Exports contain instruments and orders only. Settings and cached prices are excluded.</p></div><div className="tool-actions"><input ref={importRef} className="sr-only" id="portfolio-import" type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImport(file); }} /><label className="button secondary" htmlFor="portfolio-import"><Upload /> Import JSON</label><button className="button secondary" onClick={exportData}><Download /> Export JSON</button><button className="button danger-button" onClick={clearPortfolio} disabled={!portfolio.instruments.length}><Trash2 /> Clear Portfolio</button></div></section>
     </main>
     <footer className="site-footer"><p><ShieldCheck aria-hidden="true" /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={closePurchase} onSave={addLot} />}
-    {settingsOpen && <SettingsDialog value={settings} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />}
-    {selected && <DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={closeDetail} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} />}
+    {settingsOpen && <SettingsDialog value={settings} hasPortfolio={portfolio.instruments.length > 0} onClose={() => setSettingsOpen(false)} onSave={saveSettings} onImport={(file) => void readImport(file)} onExport={exportData} onClear={() => { if (clearPortfolio()) setSettingsOpen(false); }} />}
+    {selected && <Suspense fallback={<div className="modal-backdrop detail-backdrop"><section className="modal detail-modal detail-loading" role="status"><RefreshCw className="spin" /> Loading Holding Details…</section></div>}><DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={closeDetail} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} /></Suspense>}
     {importPreview && <ImportPreviewDialog portfolio={importPreview} onCancel={() => setImportPreview(null)} onApply={applyImport} />}
   </div>;
 }

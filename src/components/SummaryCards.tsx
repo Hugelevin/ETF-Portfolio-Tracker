@@ -1,17 +1,17 @@
 import { ArrowDownRight, ArrowUpRight, CircleDollarSign, Gauge, Landmark } from "lucide-react";
 import type { PortfolioSummary, PositionMetrics } from "../types";
-import { formatMoney, formatPercent } from "../format";
+import { formatMoney, formatPercent, formatUpdateAge } from "../format";
 
 const tone = (value: number | null) => value !== null && value > 0 ? "positive" : value !== null && value < 0 ? "negative" : "neutral";
 
-export function SummaryCards({ summary, positions }: { summary: PortfolioSummary; positions: PositionMetrics[] }) {
+export function SummaryCards({ summary, positions, updatedAt }: { summary: PortfolioSummary; positions: PositionMetrics[]; updatedAt: string | null }) {
   const incomplete = summary.pricedPositions !== summary.totalPositions;
   const missing = positions.filter((position) => summary.missingPricePositionIds.includes(position.instrument.id));
   const nonEur = positions.filter((position) => summary.nonBaseCurrencyPositionIds.includes(position.instrument.id));
   return <section className="summary" aria-labelledby="summary-title">
     <div className="summary-heading">
       <div><p className="eyebrow">Portfolio Overview</p><h2 id="summary-title">Your EUR Portfolio</h2></div>
-      <span className={`coverage ${incomplete ? "warning" : ""}`} aria-label={`${summary.pricedPositions} of ${summary.baseCurrencyPositions} EUR positions valued`}>{summary.pricedPositions}/{summary.baseCurrencyPositions} Priced{nonEur.length ? ` · ${nonEur.length} Non-EUR` : ""}</span>
+      <div className="summary-status"><span className={`coverage ${incomplete ? "warning" : ""}`} aria-label={`${summary.pricedPositions} of ${summary.baseCurrencyPositions} EUR positions valued`}>{summary.pricedPositions}/{summary.baseCurrencyPositions} Priced{nonEur.length ? ` · ${nonEur.length} Non-EUR` : ""}</span><small>{formatUpdateAge(updatedAt)}</small></div>
     </div>
     <div className="summary-grid">
       <article className="metric-card primary"><div className="metric-label"><CircleDollarSign aria-hidden="true" /><p>Current Value</p></div><strong>{summary.pricedPositions ? formatMoney(summary.currentValue) : "Unavailable"}</strong><small>{incomplete ? "Partial Total" : "All EUR Positions"}</small></article>

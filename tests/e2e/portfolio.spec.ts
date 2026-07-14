@@ -28,6 +28,11 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Holdings" })).toBeVisible();
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "1W", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".quote-strip > div")).toHaveCount(4);
+  await expect(page.locator(".period-performance")).toContainText("1W");
+  await expect(page.locator(".period-performance")).toContainText("1M");
+  await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   const desktopEdit = page.getByRole("button", { name: "Edit order from 2026-01-02" });
   if (await desktopEdit.isVisible()) {
@@ -37,7 +42,7 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
     await page.getByRole("button", { name: "Edit", exact: true }).click();
   }
   await expect(page.getByRole("dialog", { name: "Edit Order" })).toBeVisible();
-  await expect(page.getByLabel("Shares")).toBeFocused();
+  await expect(page.getByRole("button", { name: "Close order editor" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Edit Order" })).toBeHidden();
   await expect(page.getByRole("button", { name: "Close details" })).toBeVisible();
@@ -48,7 +53,8 @@ test("purchase form is keyboard reachable", async ({ page }) => {
   await page.getByRole("button", { name: "Add Purchase" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeVisible();
-  await expect(page.getByLabel("Find an Instrument")).toBeFocused();
+  await expect(page.getByRole("button", { name: "Close purchase form" })).toBeFocused();
+  await expect(page.getByLabel("Find an Instrument")).not.toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeHidden();
 });
@@ -72,9 +78,14 @@ test("loads a distinct one-year series and compares value after the first order"
   await expect(tooltip).toContainText("Price");
   await expect(tooltip).not.toContainText("Holding Value");
   await expect(tooltip).not.toContainText("Change");
-  await expect(page.getByRole("dialog").getByText("€80.00", { exact: true })).toBeVisible();
+  await expect(page.locator(".quote-strip > div").first().getByText("€80.00", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Holding Value" }).click();
-  await expect(page.getByRole("img", { name: "Historical holding value and invested cost chart with 2 data points" })).toBeVisible();
+  const valueChart = page.getByRole("img", { name: "Historical holding value and invested cost chart with 2 data points" });
+  await expect(valueChart).toBeVisible();
+  const valueChartBox = await valueChart.boundingBox();
+  expect(valueChartBox).not.toBeNull();
+  await page.mouse.move(valueChartBox!.x + valueChartBox!.width * .7, valueChartBox!.y + valueChartBox!.height * .5);
+  await expect(page.locator(".chart-tooltip .change-separator")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Holding Value vs Invested Cost" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await expect(page.getByText("1 Order")).toBeVisible();
@@ -83,10 +94,19 @@ test("loads a distinct one-year series and compares value after the first order"
 test("keeps settings data actions equal and instrument marks contained", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("button", { name: "Close settings" })).toBeFocused();
+  await expect(page.getByLabel("Cloudflare Worker URL")).not.toBeFocused();
   const actions = await page.locator(".settings-data-actions .button").all();
   expect(actions).toHaveLength(3);
   const widths = await Promise.all(actions.map(async (action) => (await action.boundingBox())?.width ?? 0));
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2);
+  const styles = await Promise.all(actions.map((action) => action.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { height: element.getBoundingClientRect().height, fontSize: style.fontSize, fontWeight: style.fontWeight };
+  })));
+  expect(new Set(styles.map((style) => style.height)).size).toBe(1);
+  expect(new Set(styles.map((style) => style.fontSize)).size).toBe(1);
+  expect(new Set(styles.map((style) => style.fontWeight)).size).toBe(1);
 
   const tile = await page.locator(".instrument-logo:visible").first().boundingBox();
   const mark = await page.locator(".instrument-logo:visible img").first().boundingBox();
@@ -164,10 +184,22 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(Math.abs((refresh!.y + refresh!.height / 2) - (refreshIcon!.y + refreshIcon!.height / 2))).toBeLessThan(1);
 
   await expect(page.getByRole("img", { name: /JEDI 7-day price trend/ })).toBeVisible();
+  const sparkline = await page.locator(".holding-sparkline svg").boundingBox();
+  expect(sparkline).not.toBeNull();
+  expect(sparkline!.width).toBeGreaterThan(120);
+  expect(sparkline!.height).toBeGreaterThanOrEqual(58);
+  const holdingNameStyle = await page.locator(".card-instrument small").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { whiteSpace: style.whiteSpace, textOverflow: style.textOverflow };
+  });
+  expect(holdingNameStyle.whiteSpace).toBe("normal");
+  expect(holdingNameStyle.textOverflow).not.toBe("ellipsis");
+  await expect(page.locator("main > .holdings-section + .portfolio-insights")).toHaveCount(1);
 
   await page.getByRole("button", { name: "Open JEDI details" }).click();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   await expect(page.getByText(/Manual Price Fallback/i)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "1W", exact: true })).toHaveAttribute("aria-pressed", "true");
 
   for (const name of ["Price", "Holding Value", "1D", "1W", "1M", "3M", "1Y", "MAX"]) {
     const control = await page.getByRole("button", { name, exact: true }).boundingBox();
@@ -186,6 +218,14 @@ test("does not overflow on the narrowest supported phone", async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBe(0);
   await expect(page.getByRole("button", { name: "Add Purchase" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Purchase" }).click();
+  const purchaseDate = await page.getByLabel("Purchase Date").boundingBox();
+  const purchaseForm = await page.locator(".purchase-modal form").boundingBox();
+  expect(purchaseDate).not.toBeNull();
+  expect(purchaseForm).not.toBeNull();
+  expect(purchaseDate!.x).toBeGreaterThanOrEqual(purchaseForm!.x);
+  expect(purchaseDate!.x + purchaseDate!.width).toBeLessThanOrEqual(purchaseForm!.x + purchaseForm!.width + .5);
 });
 
 test("keeps the full-screen detail usable in phone landscape", async ({ page }) => {

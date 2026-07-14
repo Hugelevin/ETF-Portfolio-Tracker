@@ -92,7 +92,7 @@ td > strong, td > small { display: block; }
 .card-instrument { min-width: 0; min-height: 52px; padding: 0; display: flex; align-items: center; gap: .7rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .card-instrument > span:last-child { min-width: 0; display: grid; gap: .12rem; }
 .card-instrument strong { font-size: 1rem; }
-.card-instrument small { overflow: hidden; color: var(--muted); font-size: .76rem; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.card-instrument small { color: var(--muted); font-size: .76rem; line-height: 1.25; overflow-wrap: anywhere; white-space: normal; }
 .holding-card .instrument-logo { width: 52px; height: 52px; border-radius: 13px; }
 .holding-card .status-stack { align-self: start; }
 .holding-card .status { margin-top: .15rem; }
@@ -105,7 +105,7 @@ td > strong, td > small { display: block; }
 .holding-menu button:hover, .order-menu button:hover { background: #f1f5f3; }
 .holding-menu button svg, .order-menu button svg { width: 17px; height: 17px; }
 .holding-menu button, .order-menu button.danger { color: var(--red); }
-.holding-overview { width: 100%; min-height: 90px; padding: .55rem 0 .45rem; display: grid; grid-template-columns: minmax(0,1fr) 112px; align-items: center; gap: .65rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
+.holding-overview { width: 100%; min-height: 100px; padding: .55rem 0 .45rem; display: grid; grid-template-columns: minmax(0,1fr) clamp(116px, 36vw, 148px); align-items: center; gap: .65rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .holding-performance { min-width: 0; display: grid; justify-items: start; gap: .38rem; }
 .holding-value { font-size: clamp(1.65rem, 8vw, 2rem); line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
 .return-chip { display: inline-flex; align-items: center; gap: .32rem; padding: .3rem .48rem; border-radius: 8px; font-size: .78rem; font-weight: 800; }
@@ -114,9 +114,9 @@ td > strong, td > small { display: block; }
 .return-chip.neutral { color: var(--muted); background: #eef2f0; }
 .holding-today { display: inline-flex; align-items: center; gap: .32rem; font-size: .75rem; font-weight: 700; }
 .change-separator { padding-inline: .08rem; color: currentColor; opacity: .55; }
-.holding-sparkline { min-width: 0; height: 66px; display: grid; grid-template-rows: auto 1fr; gap: .15rem; color: var(--muted); }
+.holding-sparkline { min-width: 0; height: 76px; display: grid; grid-template-rows: auto 1fr; gap: .15rem; color: var(--muted); }
 .holding-sparkline > span { justify-self: end; font-size: .7rem; font-weight: 800; letter-spacing: .08em; }
-.holding-sparkline svg { width: 112px; height: 48px; overflow: visible; }
+.holding-sparkline svg { width: 100%; height: 58px; overflow: visible; }
 .holding-sparkline.empty { place-items: end; align-content: center; }
 .holding-sparkline.empty small { font-size: .7rem; }
 .holding-card > footer { min-height: 40px; padding-top: .3rem; display: flex; align-items: center; justify-content: space-between; gap: .45rem; border-top: 1px solid #e8eeeb; color: var(--muted); font-size: .75rem; }
@@ -189,6 +189,9 @@ td > strong, td > small { display: block; }
 .modal form > footer, .modal > footer { margin: 1.4rem -1.4rem -1.4rem; border-bottom: 0; border-top: 1px solid var(--line); justify-content: flex-end; }
 label, fieldset legend { font-size: .82rem; color: #3d4f4a; font-weight: 750; }
 input, select { width: 100%; min-height: 44px; border: 1px solid #cbd8d3; border-radius: 9px; padding: .65rem .75rem; margin-top: .35rem; color: var(--ink); background: #fff; }
+.form-grid > label { min-width: 0; }
+input[type="date"] { display: block; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; }
+input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
 .currency-input { position: relative; display: block; }
 .currency-input > span { position: absolute; z-index: 1; left: .75rem; top: calc(50% + .175rem); transform: translateY(-50%); color: var(--muted); font-weight: 700; }
 .currency-input input { padding-left: 1.75rem; }
@@ -213,7 +216,8 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .settings-section h3 { margin: 0 0 .8rem; }
 .settings-section > p { color: var(--muted); font-size: .82rem; line-height: 1.45; }
 .settings-data-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .6rem; }
-.settings-data-actions .button { width: 100%; min-width: 0; }
+.settings-data-actions .button { width: 100%; min-width: 0; min-height: 48px; padding: .68rem .72rem; font-size: .84rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.settings-data-actions .button svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .confirm-modal { padding: 1.4rem; max-width: 520px; }
 .confirm-modal > header { padding: 0 0 1rem; }
 .confirm-modal > footer { margin: 1.4rem -1.4rem -1.4rem; }
@@ -231,6 +235,11 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .quote-strip p { color: var(--muted); font-size: .75rem; margin-bottom: .4rem; }
 .quote-strip strong { font-size: 1.15rem; }
 .quote-strip small { display: block; color: var(--muted); font-size: .72rem; line-height: 1.35; margin-top: .35rem; }
+.period-performance { margin: .15rem 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+.period-performance div { min-width: 0; }
+.period-performance div + div { padding-left: .65rem; border-left: 1px solid var(--line); }
+.period-performance dt { color: var(--muted); font-size: .68rem; font-weight: 750; }
+.period-performance dd { margin: .18rem 0 0; font-size: 1rem; font-weight: 800; overflow-wrap: anywhere; }
 .provenance, .fund-note { font-size: .76rem; color: var(--muted); margin: .75rem 0 0; }
 .market-details { margin-top: .7rem; color: var(--muted); font-size: .78rem; }
 .market-details summary { min-height: 44px; width: fit-content; display: inline-flex; align-items: center; padding: .55rem 0; color: var(--green-dark); font-weight: 750; cursor: pointer; }
@@ -379,6 +388,10 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .quote-strip > div { min-width: 0; padding: .7rem; }
   .quote-strip p { font-size: .72rem; line-height: 1.25; }
   .quote-strip strong { font-size: 1rem; }
+  .period-performance { grid-template-columns: 1fr; gap: .3rem; }
+  .period-performance div { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
+  .period-performance div + div { padding: .3rem 0 0; border-top: 1px solid var(--line); border-left: 0; }
+  .period-performance dd { margin: 0; font-size: .86rem; overflow-wrap: normal; }
   .provenance { line-height: 1.4; }
   .market-details dl { grid-template-columns: 1fr 1fr; }
   .chart-panel, .lots-panel { margin-top: 1rem; padding: .8rem; border-radius: 12px; }

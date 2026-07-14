@@ -10,7 +10,7 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
   const [query, setQuery] = useState("");
   const [instrumentId, setInstrumentId] = useState("");
   const [error, setError] = useState("");
-  const keyboard = useDialogKeyboard(onClose, "#instrument-search");
+  const keyboard = useDialogKeyboard(onClose, "[aria-label='Close purchase form']");
   const options = useMemo(() => VERIFIED_INSTRUMENTS.filter((item) => `${item.ticker} ${item.name} ${item.isin}`.toLowerCase().includes(query.toLowerCase())), [query]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -35,7 +35,7 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
       <header><div><p className="eyebrow">Record a Transaction</p><h2 id="purchase-title">Add an Order</h2></div><button className="icon-button" aria-label="Close purchase form" onClick={onClose}><X /></button></header>
       <form onSubmit={submit}>
         <label htmlFor="instrument-search">Find an Instrument</label>
-        <div className="input-with-icon"><Search aria-hidden="true" /><input id="instrument-search" value={query} onChange={(event) => { setQuery(event.target.value); setInstrumentId(""); }} placeholder="Search by ticker, name or ISIN" autoFocus /></div>
+        <div className="input-with-icon"><Search aria-hidden="true" /><input id="instrument-search" value={query} onChange={(event) => { setQuery(event.target.value); setInstrumentId(""); }} placeholder="Search by ticker, name or ISIN" /></div>
         <fieldset className="instrument-options"><legend>Select Exact Instrument and Venue</legend>{options.map((item) => <label className={`instrument-option ${instrumentId === item.id ? "selected" : ""}`} key={item.id}><input type="radio" name="instrument" value={item.id} checked={instrumentId === item.id} onChange={() => setInstrumentId(item.id)} /><InstrumentLogo instrument={item} /><span><strong>{item.ticker} <em>{item.assetType === "FUND" ? "Fund" : "ETF"}</em></strong><small>{item.name}</small><small>{item.isin} · {item.exchange} · {item.currency}</small></span></label>)}{!options.length && <p className="empty-inline">No verified instrument matches this search.</p>}</fieldset>
         <div className="form-grid"><label>Shares<input name="shares" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase Price per Share<input name="price" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase Date<input name="date" type="date" max={toLocalIsoDate()} required /></label><label>Broker Fees <span className="optional">Optional</span><span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" min="0" step="0.01" defaultValue="0" inputMode="decimal" /></span></label></div>
         {error && <p className="form-error" role="alert">{error}</p>}

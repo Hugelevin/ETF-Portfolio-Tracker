@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete }: Props) {
-  const [range, setRange] = useState<ChartRange>("1M");
+  const [range, setRange] = useState<ChartRange>("1W");
   const [chartMode, setChartMode] = useState<ChartMode>("price");
   const [chartReady, setChartReady] = useState(false);
   const [editing, setEditing] = useState<PurchaseLot | null>(null);
@@ -78,9 +78,9 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           <div><p>Net Return</p><strong className={position.profitLoss !== null && position.profitLoss < 0 ? "negative-text" : "positive-text"}>{formatMoney(position.profitLoss, instrument.currency)}</strong><small>After {formatMoney(position.totalFees, instrument.currency)} Broker Fees</small></div>
         </div> : <div className="quote-strip">
           <div><p>Current Price</p><strong>{formatMoney(position.quote?.price ?? null, instrument.currency)}</strong>{position.dailyChange !== null && <small className={position.dailyChange < 0 ? "negative-text" : "positive-text"}>Today {position.dailyChange >= 0 ? "▲" : "▼"} {formatMoney(position.dailyChange, instrument.currency)} · {formatPercent(position.dailyChangePercentage)}</small>}<StatusBadge quote={position.quote} loading={loading} error={error} /></div>
-          <div><p>Weekly Performance</p><strong className={weekly && weekly.value < 0 ? "negative-text" : "positive-text"}>{weekly ? formatPercent(weekly.percentage) : "Unavailable"}</strong></div>
-          <div><p>Monthly Performance</p><strong className={monthly && monthly.value < 0 ? "negative-text" : "positive-text"}>{monthly ? formatPercent(monthly.percentage) : "Unavailable"}</strong></div>
+          <div><p>Performance</p><dl className="period-performance"><div><dt>1W</dt><dd className={weekly ? (weekly.value < 0 ? "negative-text" : "positive-text") : undefined}>{weekly ? formatPercent(weekly.percentage) : "Unavailable"}</dd></div><div><dt>1M</dt><dd className={monthly ? (monthly.value < 0 ? "negative-text" : "positive-text") : undefined}>{monthly ? formatPercent(monthly.percentage) : "Unavailable"}</dd></div></dl></div>
           <div><p>Average Purchase Price</p><strong>{formatMoney(position.averagePurchasePrice, instrument.currency)}</strong></div>
+          <div><p>Market Return</p><strong className={position.marketReturn !== null ? (position.marketReturn < 0 ? "negative-text" : "positive-text") : undefined}>{formatMoney(position.marketReturn, instrument.currency)}</strong><small>{formatPercent(position.marketReturnPercentage)}</small></div>
         </div>}
 
         {position.quote && <details className="market-details"><summary>Market Data Details</summary><dl><div><dt>Source</dt><dd>{position.quote.source.toUpperCase()}</dd></div><div><dt>Data Timestamp</dt><dd>{formatDateTime(position.quote.asOf)}</dd></div><div><dt>Fetched</dt><dd>{formatDateTime(position.quote.fetchedAt)}</dd></div><div><dt>Venue</dt><dd>{position.quote.exchange}</dd></div></dl></details>}
@@ -118,7 +118,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
 }
 
 function LotEditor({ lot, onClose, onSave }: { lot: PurchaseLot; onClose: () => void; onSave: (lot: PurchaseLot) => void }) {
-  const keyboard = useDialogKeyboard(onClose, "input[name='shares']");
+  const keyboard = useDialogKeyboard(onClose, "[aria-label='Close order editor']");
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

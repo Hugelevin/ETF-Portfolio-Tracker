@@ -16,7 +16,7 @@ interface Props {
 export function SettingsDialog({ value, hasPortfolio, onClose, onSave, onImport, onExport, onClear }: Props) {
   const [settings, setSettings] = useState(value);
   const importRef = useRef<HTMLInputElement>(null);
-  const keyboard = useDialogKeyboard(onClose, "input");
+  const keyboard = useDialogKeyboard(onClose, "[aria-label='Close settings']");
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section ref={keyboard.dialogRef} onKeyDown={keyboard.onKeyDown} className="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <header><div><p className="eyebrow">Preferences and Local Data</p><h2 id="settings-title">Settings</h2></div><button className="icon-button" aria-label="Close settings" onClick={onClose}><X /></button></header>

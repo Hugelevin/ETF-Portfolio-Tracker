@@ -57,7 +57,7 @@ function ChartTooltip({ active, payload, currency, mode }: ChartTooltipProps) {
       <div><dt>Price</dt><dd>{formatMoney(point.price, currency)}</dd></div>
       {mode === "value" && <>
         <div><dt>Holding Value</dt><dd>{point.marketValue === undefined ? "Not Held" : formatMoney(point.marketValue, currency)}</dd></div>
-        <div><dt>Change</dt><dd className={point.change < 0 ? "negative-text" : point.change > 0 ? "positive-text" : ""}>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</dd></div>
+        <div><dt>Change</dt><dd className={point.change < 0 ? "negative-text" : point.change > 0 ? "positive-text" : ""}>{formatMoney(point.change, currency)}<span className="change-separator" aria-hidden="true">|</span>{formatPercent(point.changePercentage)}</dd></div>
       </>}
     </dl>
   </div>;
@@ -149,7 +149,7 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     <details className="data-alternative" open={tableOpen} onToggle={(event) => setTableOpen(event.currentTarget.open)}>
       <summary><Table2 aria-hidden="true" /><span>View Chart Data as a Table</span><ChevronDown className="data-chevron" aria-hidden="true" /></summary>
       {tableOpen && <><div className="compact-table">
-        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
+        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)}<span className="change-separator" aria-hidden="true">|</span>{formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
       </div>{visibleRows < data.length && <button type="button" className="button secondary show-more-data" onClick={() => setVisibleRows((current) => current + 50)}>Show 50 More Rows</button>}</>}
     </details>
   </>;

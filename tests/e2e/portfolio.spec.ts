@@ -36,7 +36,12 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.locator(".period-performance")).toContainText("1W");
   await expect(page.locator(".period-performance")).toContainText("1M");
   await expect(page.locator(".period-performance")).not.toContainText("Unavailable");
+  await expect(page.locator(".period-performance")).toContainText("+6.67%");
+  await expect(page.locator(".period-performance")).toContainText("+€5.00");
+  await expect(page.locator(".period-performance")).not.toContainText("(+6.67%)");
   await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
+  await expect(page.locator(".market-data-line")).toContainText(/YAHOO.*XETRA/);
+  await expect(page.getByText("Market Data Details", { exact: true })).toHaveCount(0);
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   const desktopEdit = page.getByRole("button", { name: "Edit order from 2026-01-02" });
   if (await desktopEdit.isVisible()) {
@@ -268,7 +273,8 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
 
   await page.getByRole("button", { name: "Close details" }).click();
   await page.locator(".portfolio-insights > summary").click();
-  await expect(page.locator(".portfolio-history")).toHaveAttribute("open", "");
+  await expect(page.locator(".portfolio-history")).toBeVisible();
+  await expect(page.locator(".portfolio-history > summary")).toHaveCount(0);
   const portfolioChart = page.locator(".portfolio-history-chart");
   await portfolioChart.scrollIntoViewIfNeeded();
   const portfolioBox = await portfolioChart.boundingBox();
@@ -320,7 +326,8 @@ test("opens portfolio history and shows compact chart summaries", async ({ page 
   await page.getByRole("button", { name: "Close details" }).click();
 
   await page.locator(".portfolio-insights > summary").click();
-  await expect(page.locator(".portfolio-history")).toHaveAttribute("open", "");
+  await expect(page.locator(".portfolio-history")).toHaveJSProperty("tagName", "SECTION");
+  await expect(page.locator(".portfolio-history > summary")).toHaveCount(0);
   await expect(page.locator(".portfolio-history-summary")).toContainText(/Change .* \([+-]\d/);
 });
 
@@ -401,17 +408,15 @@ test("shows an explicit rate-limit error without inventing a price", async ({ pa
   await expect(page.getByLabel("0 of 1 EUR positions valued")).toBeVisible();
 });
 
-test("filters holdings from the compact mobile control", async ({ page }) => {
+test("keeps the holdings list free of unnecessary filters", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
   await expect(page.getByLabel("1 holding shown")).toBeVisible();
   await expect(page.getByPlaceholder("Search holdings")).toHaveCount(0);
-  await page.getByRole("button", { name: "Losers" }).click();
-  await expect(page.getByText("No holdings match these filters.")).toBeVisible();
-  await page.getByRole("button", { name: "Gainers" }).click();
-  await expect(page.locator(".holding-card:visible").getByText("JEDI", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "All" }).click();
+  await expect(page.getByRole("button", { name: "All", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Gainers" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Losers" })).toHaveCount(0);
   await expect(page.locator(".holding-card:visible")).toHaveCount(1);
 });
 

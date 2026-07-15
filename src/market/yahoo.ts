@@ -109,9 +109,6 @@ export function parseYahooChart(
   const fetchedMs = Date.parse(fetchedAt);
   const asOfMs = Date.parse(latest.timestamp);
   const session = instrument.assetType === "ETF" ? marketSession(meta, fetchedMs) : undefined;
-  const delayMinutes = session === "open" && Number.isFinite(fetchedMs) && Number.isFinite(asOfMs)
-    ? Math.max(0, Math.floor((fetchedMs - asOfMs) / 60_000))
-    : null;
   const staleAfterMs = instrument.assetType === "FUND" ? 72 * 60 * 60 * 1_000 : 24 * 60 * 60 * 1_000;
   const timestampedPreviousClose = previousTradingClose(history);
   const previousClose = timestampedPreviousClose ?? (
@@ -135,7 +132,6 @@ export function parseYahooChart(
       label: instrument.assetType === "FUND" ? "Fund NAV" : "Market Price",
       stale: Number.isFinite(fetchedMs) && fetchedMs - asOfMs > staleAfterMs,
       marketSession: session,
-      delayMinutes,
     },
     history,
   };

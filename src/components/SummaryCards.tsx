@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, CircleDollarSign, Gauge, Landmark } from "lucide-react";
 import type { PortfolioSummary, PositionMetrics } from "../types";
-import { formatMoney, formatPercentInBrackets, formatUpdateAge } from "../format";
+import { formatMoney, formatPercent, formatUpdateAge } from "../format";
 
 const tone = (value: number | null) => value !== null && value > 0 ? "positive" : value !== null && value < 0 ? "negative" : "neutral";
 
@@ -15,7 +15,7 @@ export function SummaryCards({ summary, positions, updatedAt }: { summary: Portf
     </div>
     <div className="summary-grid">
       <article className="metric-card primary"><div className="metric-label"><CircleDollarSign aria-hidden="true" /><p>Current Value</p></div><strong>{summary.pricedPositions ? formatMoney(summary.currentValue) : "Unavailable"}</strong><small>{incomplete ? "Partial Total" : "All EUR Positions"}</small></article>
-      <article className={`metric-card ${tone(summary.marketReturn)}`}><div className="metric-label">{summary.marketReturn >= 0 ? <ArrowUpRight aria-hidden="true" /> : <ArrowDownRight aria-hidden="true" />}<p>Market Return</p></div><strong>{summary.pricedPositions ? formatMoney(summary.marketReturn) : "Unavailable"}</strong><small>{summary.pricedPositions ? `${formatPercentInBrackets(summary.marketReturnPercentage)} - Before Fees` : "No Valued Positions"}</small></article>
+      <article className={`metric-card ${tone(summary.marketReturn)}`}><div className="metric-label">{summary.marketReturn >= 0 ? <ArrowUpRight aria-hidden="true" /> : <ArrowDownRight aria-hidden="true" />}<p>Market Return</p></div><strong>{summary.pricedPositions ? formatMoney(summary.marketReturn) : "Unavailable"}</strong><small>{summary.pricedPositions ? `${formatPercent(summary.marketReturnPercentage)} - Before Fees` : "No Valued Positions"}</small></article>
       <article className={`metric-card ${tone(summary.dailyChange)}`}><div className="metric-label"><Gauge aria-hidden="true" /><p>Today</p></div><strong>{formatMoney(summary.dailyChange)}</strong><small>{summary.dailyChangePositions ? `${summary.dailyChangePositions} Positions` : "Unavailable"}</small></article>
       <article className="metric-card"><div className="metric-label"><Landmark aria-hidden="true" /><p>Invested</p></div><strong>{formatMoney(summary.totalInvested)}</strong><small>Fees: {formatMoney(summary.totalFees)}</small></article>
     </div>

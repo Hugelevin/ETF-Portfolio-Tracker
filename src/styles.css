@@ -59,14 +59,8 @@ main { max-width: 1480px; margin: 0 auto; padding: 3rem max(clamp(1rem, 4vw, 4re
 .metric-card.negative strong { color: #ffd0d0; }
 .metric-icon { width: 34px; height: 34px; display: grid; place-items: center; color: #fff; border-radius: 9px; background: rgba(255,255,255,.16); }
 .holdings-section { margin-top: 3.2rem; }
-.holdings-toolbar { display: flex; justify-content: flex-end; margin-bottom: .7rem; }
 .holdings-title-line { display: flex; align-items: center; gap: .45rem; }
 .holdings-count { display: inline-grid; min-width: 27px; height: 27px; padding-inline: .38rem; place-items: center; border-radius: 999px; color: var(--green-dark); background: var(--green-soft); font-size: .76rem; font-weight: 800; letter-spacing: 0; }
-.return-filter { display: flex; align-items: center; gap: .2rem; padding: .2rem; border-radius: 10px; background: #edf3f0; }
-.return-filter button { min-height: 44px; padding: .45rem .65rem; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: .78rem; font-weight: 750; }
-.return-filter button svg { width: 15px; height: 15px; }
-.return-filter button.active { color: var(--green-dark); background: #fff; box-shadow: 0 2px 8px rgba(25,55,47,.09); }
-.holdings-empty { min-height: 150px; display: grid; place-items: center; padding: 1rem; border: 1px dashed #b9cbc5; border-radius: 14px; color: var(--muted); background: rgba(255,255,255,.65); }
 .holdings-cards { display: none; }
 .holdings-desktop { overflow-x: auto; }
 .holdings-desktop table { min-width: 820px; }
@@ -150,12 +144,12 @@ td > strong, td > small { display: block; }
 .refresh-button svg { display: block; flex: 0 0 auto; margin: 0; }
 .portfolio-insights { margin-top: 1rem; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.82); box-shadow: 0 7px 20px rgba(25,55,47,.04); }
 .portfolio-insights > summary { min-height: 60px; padding: .75rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; list-style: none; cursor: pointer; }
-.portfolio-insights > summary::-webkit-details-marker, .portfolio-history > summary::-webkit-details-marker { display: none; }
-.portfolio-insights > summary > span, .portfolio-history > summary > span { display: flex; align-items: center; gap: .7rem; }
+.portfolio-insights > summary::-webkit-details-marker { display: none; }
+.portfolio-insights > summary > span { display: flex; align-items: center; gap: .7rem; }
 .portfolio-insights > summary strong { display: block; }
 .portfolio-insights > summary small { display: block; margin-top: .12rem; color: var(--muted); font-size: .75rem; }
-.insights-chevron, .portfolio-history > summary > svg { transition: transform .18s ease; }
-.portfolio-insights[open] > summary .insights-chevron, .portfolio-history[open] > summary > svg { transform: rotate(180deg); }
+.insights-chevron { transition: transform .18s ease; }
+.portfolio-insights[open] > summary .insights-chevron { transform: rotate(180deg); }
 .insights-body { padding: 0 1rem 1rem; display: grid; grid-template-columns: minmax(280px,.75fr) minmax(420px,1.25fr); gap: 1rem; }
 .allocation-panel, .portfolio-history { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
 .insight-heading { display: flex; align-items: end; justify-content: space-between; gap: .75rem; }
@@ -167,7 +161,8 @@ td > strong, td > small { display: block; }
 .allocation-track { height: 8px; margin-top: .3rem; overflow: hidden; border-radius: 999px; background: #e8efec; }
 .allocation-track span { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--green); }
 .portfolio-history { padding: 0; }
-.portfolio-history > summary { min-height: 54px; padding: .7rem 1rem; display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; }
+.portfolio-history-heading { min-height: 54px; padding: .7rem 1rem; display: flex; align-items: center; gap: .7rem; }
+.portfolio-history-heading svg { width: 20px; height: 20px; color: var(--green); }
 .portfolio-history-body { padding: 0 1rem 1rem; }
 .portfolio-history-body .range-controls { margin: .25rem 0 .75rem; }
 .portfolio-history-summary { margin: 0 0 .5rem; color: var(--muted); font-size: .78rem; font-weight: 700; }
@@ -247,13 +242,10 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .period-performance div + div { padding-left: .65rem; border-left: 1px solid var(--line); }
 .period-performance dt { color: var(--muted); font-size: .68rem; font-weight: 750; }
 .period-performance dd { margin: .18rem 0 0; font-size: clamp(.82rem, 1.1vw, 1rem); font-weight: 800; white-space: nowrap; }
+.period-performance small { margin-top: .15rem; font-size: .64rem; white-space: nowrap; }
 .provenance, .fund-note { font-size: .76rem; color: var(--muted); margin: .75rem 0 0; }
-.market-details { margin-top: .7rem; color: var(--muted); font-size: .78rem; }
-.market-details summary { min-height: 44px; width: fit-content; display: inline-flex; align-items: center; padding: .55rem 0; color: var(--green-dark); font-weight: 750; cursor: pointer; }
-.market-details dl { max-width: 720px; margin: 0; padding: .75rem; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .7rem; border: 1px solid var(--line); border-radius: 10px; background: #f7faf8; }
-.market-details dl div { min-width: 0; }
-.market-details dt { font-size: .7rem; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
-.market-details dd { margin: .2rem 0 0; color: var(--ink); overflow-wrap: anywhere; }
+.market-data-line { margin: .65rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .45rem; color: var(--muted); font-size: .7rem; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.market-data-line span[aria-hidden="true"] { color: #9aaba5; }
 .fund-note { padding: .75rem; color: #70501f; background: var(--amber-soft); border-radius: 8px; }
 .return-note { margin: .75rem 0 0; padding: .7rem .8rem; color: var(--muted); background: #f6f9f8; border: 1px solid var(--line); border-radius: 8px; font-size: .76rem; }
 .chart-panel, .lots-panel { margin-top: 1.5rem; border: 1px solid var(--line); border-radius: 14px; padding: 1rem; }
@@ -370,9 +362,6 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .portfolio-history-body { padding: 0 .8rem .8rem; }
   .portfolio-history-chart { height: 230px; }
   .holdings-section { margin-top: 2.25rem; }
-  .holdings-toolbar { display: block; }
-  .return-filter { width: 100%; }
-  .return-filter button { flex: 1; min-height: 44px; }
   .holdings-desktop { display: none; }
   .holdings-cards { display: grid; grid-template-columns: 1fr; gap: .75rem; }
   .toast { left: .75rem; right: .75rem; top: calc(78px + env(safe-area-inset-top)); max-width: none; border-radius: 14px; }
@@ -406,11 +395,11 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .quote-strip p { font-size: .72rem; line-height: 1.25; }
   .quote-strip strong { font-size: 1rem; }
   .period-performance { grid-template-columns: 1fr; gap: .3rem; }
-  .period-performance div { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
+  .period-performance div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: .1rem .4rem; }
   .period-performance div + div { padding: .3rem 0 0; border-top: 1px solid var(--line); border-left: 0; }
-  .period-performance dd { margin: 0; font-size: .86rem; overflow-wrap: normal; }
+  .period-performance dd { margin: 0; justify-self: end; font-size: .86rem; overflow-wrap: normal; }
+  .period-performance small { grid-column: 1 / -1; justify-self: end; margin-top: 0; }
   .provenance { line-height: 1.4; }
-  .market-details dl { grid-template-columns: 1fr 1fr; }
   .chart-panel, .lots-panel { margin-top: 1rem; padding: .8rem; border-radius: 12px; }
   .chart-toolbar { align-items: flex-start; flex-direction: column; }
   .view-controls { width: 100%; }

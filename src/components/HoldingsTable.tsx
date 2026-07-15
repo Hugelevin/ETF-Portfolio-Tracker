@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { ChevronRight, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronRight, Trash2 } from "lucide-react";
 import type { MarketPoint, PositionMetrics } from "../types";
 import { formatMoney, formatNumber, formatPercentInBrackets } from "../format";
 import { HoldingSparkline } from "./HoldingSparkline";
@@ -8,7 +7,6 @@ import { InstrumentLogo } from "./InstrumentLogo";
 import { useMediaQuery } from "./useMediaQuery";
 
 const direction = (value: number | null) => value === null ? "neutral" : value > 0 ? "positive" : value < 0 ? "negative" : "neutral";
-type ReturnFilter = "all" | "gainers" | "losers";
 
 function compactName(name: string) {
   return name
@@ -30,23 +28,13 @@ interface Props {
 }
 
 export function HoldingsTable({ positions, loading, errors, sparklineHistory, onSelect, onDelete }: Props) {
-  const [returnFilter, setReturnFilter] = useState<ReturnFilter>("all");
   const mobile = useMediaQuery("(max-width: 700px)");
-  const visible = useMemo(() => positions.filter((position) => returnFilter === "all" || (returnFilter === "gainers" ? (position.marketReturn ?? 0) > 0 : (position.marketReturn ?? 0) < 0)), [positions, returnFilter]);
-  const count = visible.length === positions.length ? `${positions.length}` : `${visible.length} of ${positions.length}`;
-  const countLabel = visible.length === positions.length ? `${positions.length} ${positions.length === 1 ? "holding" : "holdings"}` : `${visible.length} of ${positions.length} holdings`;
+  const countLabel = `${positions.length} ${positions.length === 1 ? "holding" : "holdings"}`;
 
   return <section className="holdings-section" aria-labelledby="holdings-title">
-    <div className="section-heading"><div><p className="eyebrow">Positions</p><div className="holdings-title-line"><h2 id="holdings-title">Holdings</h2><span className="holdings-count" aria-label={`${countLabel} shown`}>{count}</span></div></div></div>
-    <div className="holdings-toolbar" aria-label="Filter holdings">
-      <div className="return-filter" role="group" aria-label="Filter by return">
-        <button type="button" className={returnFilter === "all" ? "active" : ""} aria-pressed={returnFilter === "all"} onClick={() => setReturnFilter("all")}>All</button>
-        <button type="button" className={returnFilter === "gainers" ? "active" : ""} aria-pressed={returnFilter === "gainers"} onClick={() => setReturnFilter("gainers")}><TrendingUp aria-hidden="true" /> Gainers</button>
-        <button type="button" className={returnFilter === "losers" ? "active" : ""} aria-pressed={returnFilter === "losers"} onClick={() => setReturnFilter("losers")}><TrendingDown aria-hidden="true" /> Losers</button>
-      </div>
-    </div>
-    {!visible.length ? <div className="holdings-empty" role="status">No holdings match these filters.</div> : mobile
-      ? <div className="holdings-cards">{visible.map((position) => <article className="holding-card" key={position.instrument.id}>
+    <div className="section-heading"><div><p className="eyebrow">Positions</p><div className="holdings-title-line"><h2 id="holdings-title">Holdings</h2><span className="holdings-count" aria-label={`${countLabel} shown`}>{positions.length}</span></div></div></div>
+    {mobile
+      ? <div className="holdings-cards">{positions.map((position) => <article className="holding-card" key={position.instrument.id}>
         <header>
           <button className="card-instrument" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button>
           <StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} />
@@ -65,7 +53,7 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
       </article>)}</div>
       : <div className="table-shell holdings-desktop"><table>
         <thead><tr><th scope="col">Instrument</th><th scope="col">Shares</th><th scope="col">Price</th><th scope="col">Invested</th><th scope="col">Value</th><th scope="col">Market Return</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
-        <tbody>{visible.map((position) => <tr key={position.instrument.id}>
+        <tbody>{positions.map((position) => <tr key={position.instrument.id}>
           <td><button className="instrument-link" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button></td>
           <td>{formatNumber(position.totalShares)}</td>
           <td><strong>{position.quote ? formatMoney(position.quote.price, position.instrument.currency) : "Unavailable"}</strong><StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} /></td>

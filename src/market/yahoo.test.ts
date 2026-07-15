@@ -77,7 +77,7 @@ describe("parseYahooChart", () => {
 
     const record = parseYahooChart(instrument, changed, "2026-07-13T08:18:40.000Z");
 
-    expect(record.quote).toMatchObject({ marketSession: "open", delayMinutes: 2 });
+    expect(record.quote).toMatchObject({ marketSession: "open" });
   });
 
   it.each([

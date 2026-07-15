@@ -7,6 +7,11 @@ export function formatMoney(value: number | null, currency = "EUR"): string {
   }
 }
 
+export function formatSignedMoney(value: number | null, currency = "EUR"): string {
+  const formatted = formatMoney(value, currency);
+  return value !== null && Number.isFinite(value) && value > 0 ? `+${formatted}` : formatted;
+}
+
 export function formatNumber(value: number, maximumFractionDigits = 4): string {
   if (!Number.isFinite(value)) return "Unavailable";
   return new Intl.NumberFormat("en-GB", { maximumFractionDigits }).format(value);

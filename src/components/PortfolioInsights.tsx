@@ -16,7 +16,6 @@ interface Props {
 
 export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange }: Props) {
   const [open, setOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(true);
   const [range, setRange] = useState<ChartRange>("1W");
   const basePositions = useMemo(() => positions.filter((position) => position.instrument.currency === baseCurrency), [positions, baseCurrency]);
   const allocation = useMemo(() => basePositions
@@ -37,7 +36,7 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
     onRange(next);
   }
 
-  return <details className="portfolio-insights" open={open} onToggle={(event) => { const nextOpen = event.currentTarget.open; setOpen(nextOpen); if (nextOpen) setHistoryOpen(true); }}>
+  return <details className="portfolio-insights" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary><span><BarChart3 aria-hidden="true" /><span><strong>Portfolio Insights</strong><small>Allocation and portfolio history</small></span></span><ChevronDown className="insights-chevron" aria-hidden="true" /></summary>
     {open && <div className="insights-body">
       <section className="allocation-panel" aria-labelledby="allocation-title">
@@ -52,16 +51,16 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
         })}</div>
       </section>
 
-      <details className="portfolio-history" open={historyOpen} onToggle={(event) => setHistoryOpen(event.currentTarget.open)}>
-        <summary><span><LineChart aria-hidden="true" /><strong>Portfolio Value History</strong></span><ChevronDown aria-hidden="true" /></summary>
-        {historyOpen && <div className="portfolio-history-body">
+      <section className="portfolio-history" aria-labelledby="portfolio-history-title">
+        <div className="portfolio-history-heading"><LineChart aria-hidden="true" /><strong id="portfolio-history-title">Portfolio Value History</strong></div>
+        <div className="portfolio-history-body">
           <div className="range-controls" aria-label="Portfolio history range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={(event) => { event.preventDefault(); selectRange(item); }}>{item}</button>)}</div>
           {!complete ? <div className="insight-empty">Complete historical prices are not available for every holding in this range.</div> : !history.length ? <div className="insight-empty">Portfolio history begins after your first order.</div> : <>
             <p className="portfolio-history-summary">Latest {formatMoney(latest?.marketValue ?? null)}<span className="summary-separator" aria-hidden="true">|</span>Change {formatMoney(change)} {formatPercentInBrackets(changePercent)}</p>
             <Suspense fallback={<div className="chart-empty chart-skeleton" role="status">Loading Portfolio Chart…</div>}><PortfolioHistoryChart points={history} /></Suspense>
           </>}
-        </div>}
-      </details>
+        </div>
+      </section>
     </div>}
   </details>;
 }

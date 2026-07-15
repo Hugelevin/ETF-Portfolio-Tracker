@@ -9,15 +9,15 @@ describe("StatusBadge", () => {
     expect(screen.getByText("Rate limit reached")).toBeInTheDocument();
   });
 
-  it("uses Yahoo session state and quote lag for concise statuses", () => {
-    const baseQuote = { instrumentId: "jedi", price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-15T09:00:00Z", fetchedAt: "2026-07-15T09:02:00Z", source: "yahoo" as const, label: "Market Price", stale: false };
-    const { rerender } = render(<StatusBadge quote={{ ...baseQuote, marketSession: "open", delayMinutes: 2 } as never} />);
+  it("uses Yahoo session state and data freshness for concise statuses", () => {
+    const baseQuote = { instrumentId: "jedi", price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-15T09:00:00Z", fetchedAt: "2026-07-15T09:18:00Z", source: "yahoo" as const, label: "Market Price", stale: false };
+    const { rerender } = render(<StatusBadge quote={{ ...baseQuote, marketSession: "open" } as never} />);
     expect(screen.getByText("Updated")).toBeInTheDocument();
 
-    rerender(<StatusBadge quote={{ ...baseQuote, marketSession: "open", delayMinutes: 18 } as never} />);
-    expect(screen.getByText("Delayed")).toBeInTheDocument();
+    rerender(<StatusBadge quote={{ ...baseQuote, marketSession: "open", stale: true } as never} />);
+    expect(screen.getByText("Stale")).toBeInTheDocument();
 
-    rerender(<StatusBadge quote={{ ...baseQuote, marketSession: "closed", delayMinutes: 120 } as never} />);
+    rerender(<StatusBadge quote={{ ...baseQuote, marketSession: "closed" } as never} />);
     expect(screen.getByText("Closed")).toBeInTheDocument();
   });
 });

@@ -14,8 +14,10 @@ test.beforeEach(async ({ page }) => {
       ? [Date.parse("2025-08-01T09:00:00Z"), Date.parse("2026-02-02T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
       : range === "3mo"
         ? [Date.parse("2026-06-01T09:00:00Z"), Date.parse("2026-07-06T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
+        : range === "1mo"
+          ? [Date.parse("2026-06-13T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
         : [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
-    const closes = range === "1y" ? [60, 70, 79] : range === "3mo" ? [70, 75, 80] : [78, 80];
+    const closes = range === "1y" ? [60, 70, 79] : range === "3mo" ? [70, 75, 80] : range === "1mo" ? [75, 80] : [78, 80];
     await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: timestamps, indicators: { quote: [{ close: closes }] } }] } } });
   });
   await page.addInitScript((portfolio) => {
@@ -33,12 +35,13 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "1W", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".quote-strip > div")).toHaveCount(4);
-  await expect(page.locator(".period-performance")).toContainText("1W");
-  await expect(page.locator(".period-performance")).toContainText("1M");
-  await expect(page.locator(".period-performance")).not.toContainText("Unavailable");
-  await expect(page.locator(".period-performance")).toContainText("+6.67%");
-  await expect(page.locator(".period-performance")).toContainText("+€5.00");
-  await expect(page.locator(".period-performance")).not.toContainText("(+6.67%)");
+  const selectedPerformance = page.locator(".selected-performance");
+  await expect(selectedPerformance).toContainText("1W Performance");
+  await page.getByRole("button", { name: "1M", exact: true }).click();
+  await expect(selectedPerformance).toContainText("1M Performance");
+  await expect(selectedPerformance).toContainText("+6.67%");
+  await expect(selectedPerformance).toContainText("+€5.00");
+  await expect(selectedPerformance).not.toContainText("(+6.67%)");
   await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
   await expect(page.locator(".market-data-line")).toHaveText(/Source: YAHOO · Data: 13 Jul 2026, \d{2}:10 · Fetched:/);
   await expect(page.locator(".market-data-line")).not.toContainText("XETRA");
@@ -287,16 +290,17 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
   await expect(page.locator(".portfolio-history-summary .change-separator")).toHaveCount(0);
 });
 
-test("prefetches enough history for weekly and monthly performance", async ({ page }) => {
+test("loads enough history for selected monthly performance", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
-  const threeMonthResponse = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "3mo");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
-  await threeMonthResponse;
-  await expect(page.locator(".period-performance")).not.toContainText("Unavailable");
+  const monthlyResponse = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "1mo");
+  await page.getByRole("button", { name: "1M", exact: true }).click();
+  await monthlyResponse;
+  await expect(page.locator(".selected-performance")).toContainText("+6.67%");
 });
 
-test("keeps unavailable performance intact on desktop", async ({ page }) => {
+test("keeps insufficient performance status intact on desktop", async ({ page }) => {
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", async (route) => {
     const range = new URL(route.request().url()).searchParams.get("range");
@@ -309,9 +313,10 @@ test("keeps unavailable performance intact on desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 850 });
   await page.goto("/");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
-  const unavailable = page.locator(".period-performance dd", { hasText: "Unavailable" });
-  await expect(unavailable).toBeVisible();
-  expect(await unavailable.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
+  await page.getByRole("button", { name: "1M", exact: true }).click();
+  const insufficient = page.locator(".selected-performance strong", { hasText: "Not Enough Data" });
+  await expect(insufficient).toBeVisible();
+  expect(await insufficient.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
 });
 
 test("opens portfolio history and shows compact chart summaries", async ({ page }) => {
@@ -359,6 +364,8 @@ test("does not overflow on the narrowest supported phone", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Add Purchase" })).toBeVisible();
 
   await page.getByRole("button", { name: "Add Purchase" }).click();
+  await page.getByRole("radio", { name: /JEDI/ }).evaluate((radio) => (radio as HTMLInputElement).click());
+  await expect(page.getByLabel("Purchase Date")).toBeVisible();
   const purchaseDate = await page.getByLabel("Purchase Date").boundingBox();
   const purchaseForm = await page.locator(".purchase-modal form").boundingBox();
   expect(purchaseDate).not.toBeNull();
@@ -392,6 +399,8 @@ test("keeps the purchase date aligned on tablet", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto("/");
   await page.getByRole("button", { name: "Add Purchase" }).click();
+  await page.getByRole("radio", { name: /JEDI/ }).evaluate((radio) => (radio as HTMLInputElement).click());
+  await expect(page.getByLabel("Purchase Date")).toBeVisible();
 
   const purchaseDate = await page.getByLabel("Purchase Date").boundingBox();
   const brokerFees = await page.getByLabel(/Broker Fees/).boundingBox();

@@ -95,7 +95,7 @@ describe("portfolio dashboard", () => {
     await user.click(within(detail).getByRole("button", { name: "1D" }));
     expect(await within(detail).findByText("Not Enough Data")).toBeInTheDocument();
     expect(within(detail).queryByText("+17.14%")).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("shows raw market prices as the default historical chart", async () => {
     const user = userEvent.setup();

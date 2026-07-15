@@ -253,6 +253,7 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .quote-strip > div { padding: 1rem; background: #f6f9f8; border: 1px solid var(--line); border-radius: 12px; }
 .quote-strip p { color: var(--muted); font-size: .75rem; margin-bottom: .4rem; }
 .quote-strip strong { font-size: 1.15rem; }
+.selected-performance strong { white-space: nowrap; }
 .quote-strip small { display: block; color: var(--muted); font-size: .72rem; line-height: 1.35; margin-top: .35rem; }
 .period-performance { margin: .15rem 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
 .period-performance div { min-width: 0; }

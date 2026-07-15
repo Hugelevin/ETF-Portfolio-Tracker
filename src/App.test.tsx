@@ -71,7 +71,7 @@ describe("portfolio dashboard", () => {
     expect(screen.getAllByText("Cached").length).toBeGreaterThan(0);
   });
 
-  it("hydrates valuation from another range without mislabelling its history as one month", async () => {
+  it("hydrates valuation from another range while keeping chart ranges separate", async () => {
     const user = userEvent.setup();
     const instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
@@ -87,14 +87,12 @@ describe("portfolio dashboard", () => {
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
     const detail = await screen.findByRole("dialog", { name: /JEDI/ });
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
-    expect(within(detail).getByText("Not Enough Data")).toBeInTheDocument();
-    expect(within(detail).getByText("Current value €82.00")).toBeInTheDocument();
-    await user.click(within(detail).getByRole("button", { name: "1Y" }));
-    expect(await within(detail).findByText("+17.14%")).toBeInTheDocument();
-    expect(within(detail).getByText("+€12.00 price change")).toBeInTheDocument();
+    expect(within(detail).getAllByText("N/A")).toHaveLength(2);
+    const oneYear = within(detail).getByRole("button", { name: "1Y" });
+    await user.click(oneYear);
+    expect(oneYear).toHaveAttribute("aria-pressed", "true");
     await user.click(within(detail).getByRole("button", { name: "1D" }));
-    expect(await within(detail).findByText("Not Enough Data")).toBeInTheDocument();
-    expect(within(detail).queryByText("+17.14%")).not.toBeInTheDocument();
+    expect(await within(detail).findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
   }, 10_000);
 
   it("shows raw market prices as the default historical chart", async () => {

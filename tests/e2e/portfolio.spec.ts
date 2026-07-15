@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
     const timestamps = range === "1y"
       ? [Date.parse("2025-08-01T09:00:00Z"), Date.parse("2026-02-02T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
       : range === "3mo"
-        ? [Date.parse("2026-06-01T09:00:00Z"), Date.parse("2026-07-06T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
+        ? [Date.parse("2026-06-13T09:00:00Z"), Date.parse("2026-07-06T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
         : range === "1mo"
           ? [Date.parse("2026-06-13T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
         : [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
@@ -31,17 +31,19 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
   await expect(page.locator(".summary")).not.toHaveClass(/loss/);
   await expect(page.getByRole("heading", { name: "Holdings" })).toBeVisible();
+  const threeMonthResponse = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "3mo");
   await page.getByRole("button", { name: /JEDI VanEck/ }).click();
+  await threeMonthResponse;
   await expect(page.getByRole("dialog", { name: /JEDI · VanEck Space/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "1W", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".quote-strip > div")).toHaveCount(4);
-  const selectedPerformance = page.locator(".selected-performance");
-  await expect(selectedPerformance).toContainText("1W Performance");
-  await page.getByRole("button", { name: "1M", exact: true }).click();
-  await expect(selectedPerformance).toContainText("1M Performance");
-  await expect(selectedPerformance).toContainText("+6.67%");
-  await expect(selectedPerformance).toContainText("+€5.00");
-  await expect(selectedPerformance).not.toContainText("(+6.67%)");
+  const periodPerformance = page.locator(".period-performance");
+  await expect(periodPerformance).toContainText("1W");
+  await expect(periodPerformance).toContainText("1M");
+  await expect(periodPerformance).toContainText("+6.67%");
+  await expect(periodPerformance).toContainText("+14.29%");
+  await expect(periodPerformance).toContainText("+€5.00");
+  await expect(periodPerformance).toContainText("+€10.00");
   await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
   await expect(page.locator(".market-data-line")).toHaveText(/Source: YAHOO · Data: 13 Jul 2026, \d{2}:10 · Fetched:/);
   await expect(page.locator(".market-data-line")).not.toContainText("XETRA");
@@ -290,14 +292,14 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
   await expect(page.locator(".portfolio-history-summary .change-separator")).toHaveCount(0);
 });
 
-test("loads enough history for selected monthly performance", async ({ page }) => {
+test("prefetches enough history for combined weekly and monthly performance", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
+  const threeMonthResponse = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "3mo");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
-  const monthlyResponse = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "1mo");
-  await page.getByRole("button", { name: "1M", exact: true }).click();
-  await monthlyResponse;
-  await expect(page.locator(".selected-performance")).toContainText("+6.67%");
+  await threeMonthResponse;
+  await expect(page.locator(".period-performance")).toContainText("+6.67%");
+  await expect(page.locator(".period-performance")).toContainText("+14.29%");
 });
 
 test("keeps insufficient performance status intact on desktop", async ({ page }) => {
@@ -313,10 +315,9 @@ test("keeps insufficient performance status intact on desktop", async ({ page })
   await page.setViewportSize({ width: 1180, height: 850 });
   await page.goto("/");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
-  await page.getByRole("button", { name: "1M", exact: true }).click();
-  const insufficient = page.locator(".selected-performance strong", { hasText: "Not Enough Data" });
-  await expect(insufficient).toBeVisible();
-  expect(await insufficient.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
+  const unavailable = page.locator(".period-performance dd", { hasText: "N/A" });
+  await expect(unavailable).toHaveCount(1);
+  expect(await unavailable.first().evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
 });
 
 test("opens portfolio history and shows compact chart summaries", async ({ page }) => {
@@ -407,6 +408,56 @@ test("keeps the purchase date aligned on tablet", async ({ page }) => {
   expect(purchaseDate).not.toBeNull();
   expect(brokerFees).not.toBeNull();
   expect(Math.abs(purchaseDate!.width - brokerFees!.width)).toBeLessThan(1);
+  expect(Math.abs(purchaseDate!.height - brokerFees!.height)).toBeLessThan(1);
+  expect(purchaseDate!.height).toBeLessThanOrEqual(52);
+});
+
+test("keeps the delete action in the holding card top-right corner", async ({ page }) => {
+  await page.unroute("http://market.test/yahoo/chart**");
+  await page.route("http://market.test/yahoo/chart**", async (route) => {
+    const now = Math.floor(Date.now() / 1_000);
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: [now - 600, now], indicators: { quote: [{ close: [79, 80] }] } }] } } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const card = await page.locator(".holding-card").boundingBox();
+  const remove = await page.getByRole("button", { name: "Delete JEDI holding" }).boundingBox();
+  expect(card).not.toBeNull();
+  expect(remove).not.toBeNull();
+  expect(card!.x + card!.width - (remove!.x + remove!.width)).toBeLessThanOrEqual(16);
+  expect(remove!.y - card!.y).toBeLessThanOrEqual(16);
+});
+
+test("orders the overview cards by value, invested, return and today", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".metric-card .metric-label p")).toHaveText(["Current Value", "Invested", "Market Return", "Today"]);
+});
+
+test("removes the portfolio-history cash-flow disclaimer", async ({ page }) => {
+  await page.goto("/");
+  await page.locator(".portfolio-insights > summary").click();
+  await expect(page.getByText(/Value includes purchases and deposits/i)).toHaveCount(0);
+});
+
+test("collapses long order histories and lets the user expand them", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const manyOrders = {
+    ...sample,
+    lots: Array.from({ length: 10 }, (_, index) => ({ id: `lot-${index + 1}`, instrumentId: "jedi-xetra-eur", shares: 1, pricePerShare: 70 + index, purchaseDate: `2026-01-${String(index + 1).padStart(2, "0")}`, fees: 0 })),
+  };
+  await page.addInitScript((portfolio) => localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify(portfolio)), manyOrders);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await expect(page.locator(".order-card")).toHaveCount(3);
+  expect(await page.locator(".order-card time").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("datetime")))).toEqual(["2026-01-10", "2026-01-09", "2026-01-08"]);
+  const showAll = page.getByRole("button", { name: "Show All 10 Orders" });
+  await expect(showAll).toHaveAttribute("aria-expanded", "false");
+  await showAll.click();
+  await expect(page.locator(".order-card")).toHaveCount(10);
+  const showFewer = page.getByRole("button", { name: "Show Fewer Orders" });
+  await expect(showFewer).toHaveAttribute("aria-expanded", "true");
+  await showFewer.click();
+  await expect(page.locator(".order-card")).toHaveCount(3);
 });
 
 test("locks and restores dashboard scrolling while a modal is open", async ({ page }) => {

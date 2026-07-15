@@ -92,7 +92,7 @@ td > strong, td > small { display: block; }
 .holding-card .instrument-logo { width: 52px; height: 52px; border-radius: 13px; }
 .holding-card .status-stack { align-self: start; }
 .holding-card .status { margin-top: .15rem; }
-.holding-delete { align-self: start; color: var(--red); }
+.holding-delete { grid-column: 3; align-self: start; color: var(--red); }
 .holding-delete:hover { color: var(--red); background: var(--red-soft); border-color: #efcece; }
 .holding-menu, .order-menu { position: relative; }
 .holding-menu summary, .order-menu summary { width: 44px; height: 44px; display: grid; place-items: center; list-style: none; border-radius: 10px; color: var(--ink); cursor: pointer; }
@@ -174,7 +174,6 @@ td > strong, td > small { display: block; }
 .portfolio-history-controls .range-controls { margin: 0; }
 .portfolio-view-controls { flex: 0 0 auto; }
 .portfolio-history-summary { margin: 0 0 .5rem; color: var(--muted); font-size: .78rem; font-weight: 700; }
-.cash-flow-note { margin: 0 0 .65rem; padding: .5rem .6rem; border-radius: 8px; color: var(--muted); background: #f4f7f6; font-size: .7rem; line-height: 1.4; }
 .portfolio-history-chart { height: 250px; }
 .insight-empty { min-height: 190px; display: grid; place-items: center; padding: 1rem; color: var(--muted); text-align: center; }
 .data-tools { margin-top: 2.5rem; padding: 1.3rem 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 2rem; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.65); }
@@ -198,10 +197,11 @@ td > strong, td > small { display: block; }
 .modal form > footer, .modal > footer { margin: 1.4rem -1.4rem -1.4rem; border-bottom: 0; border-top: 1px solid var(--line); justify-content: flex-end; }
 label, fieldset legend { font-size: .82rem; color: #3d4f4a; font-weight: 750; }
 input, select { width: 100%; min-height: 44px; border: 1px solid #cbd8d3; border-radius: 9px; padding: .65rem .75rem; margin-top: .35rem; color: var(--ink); background: #fff; }
-.form-grid > label { min-width: 0; }
+.form-grid > label { min-width: 0; align-self: start; }
+.form-grid input { box-sizing: border-box; height: 48px; min-height: 48px; max-height: 48px; }
 /* Explicit box sizing and inner spacing keep native Safari date text centred. */
-input[type="date"] { display: block; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; height: 48px; padding: .65rem .75rem; line-height: 1.35; }
-input[type="date"]::-webkit-date-and-time-value { min-width: 0; min-height: 1.35em; padding: 0; text-align: left; }
+input[type="date"] { display: block; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; block-size: 48px; min-block-size: 48px; max-block-size: 48px; overflow: hidden; padding: .65rem .75rem; line-height: 1.35; }
+input[type="date"]::-webkit-date-and-time-value { min-width: 0; min-height: 0; height: 1.35em; padding: 0; text-align: left; }
 input[type="date"]::-webkit-calendar-picker-indicator { margin: 0; }
 .currency-input { position: relative; display: block; }
 .currency-input > span { position: absolute; z-index: 1; left: .75rem; top: calc(50% + .175rem); transform: translateY(-50%); color: var(--muted); font-weight: 700; }
@@ -253,7 +253,6 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .quote-strip > div { padding: 1rem; background: #f6f9f8; border: 1px solid var(--line); border-radius: 12px; }
 .quote-strip p { color: var(--muted); font-size: .75rem; margin-bottom: .4rem; }
 .quote-strip strong { font-size: 1.15rem; }
-.selected-performance strong { white-space: nowrap; }
 .quote-strip small { display: block; color: var(--muted); font-size: .72rem; line-height: 1.35; margin-top: .35rem; }
 .period-performance { margin: .15rem 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
 .period-performance div { min-width: 0; }
@@ -321,6 +320,9 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .order-card dt { color: var(--muted); font-size: .7rem; line-height: 1.2; }
 .order-card dd { order: -1; margin: 0; max-width: 100%; overflow: hidden; font-size: .78rem; font-weight: 760; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .order-card .order-total dd { color: var(--ink); font-size: .86rem; font-weight: 850; }
+.orders-toggle { min-height: 44px; margin: .7rem auto 0; padding: .55rem .8rem; display: flex; align-items: center; justify-content: center; gap: .4rem; border: 1px solid var(--line); border-radius: 9px; color: var(--green-dark); background: #fff; font-size: .76rem; font-weight: 800; }
+.orders-toggle svg { width: 17px; height: 17px; transition: transform .15s ease; }
+.orders-toggle.expanded svg { transform: rotate(180deg); }
 .nested-editor { position: fixed; inset: 0; z-index: 100; background: rgba(16,34,29,.68); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 1rem; overflow: auto; }
 .nested-editor form { width: min(600px, 100%); max-height: calc(100dvh - 2rem); overflow: auto; padding: 0; background: #fff; border-radius: 16px; box-shadow: 0 24px 70px rgba(4,25,20,.35); }
 .nested-editor .section-heading { padding: 1rem 1.4rem; margin: 0; border-bottom: 1px solid var(--line); }
@@ -442,6 +444,7 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .data-alternative .data-chevron { margin-left: auto; }
   .orders-table { display: none; }
   .order-cards { display: grid; gap: .55rem; }
+  .orders-toggle { width: 100%; }
   .nested-editor { place-items: end stretch; padding: 0; }
   .nested-editor form { width: 100%; max-height: 92dvh; border-radius: 18px 18px 0 0; }
   .nested-editor .form-grid { grid-template-columns: 1fr; }

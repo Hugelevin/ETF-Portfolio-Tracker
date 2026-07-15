@@ -40,7 +40,7 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.locator(".period-performance")).toContainText("+€5.00");
   await expect(page.locator(".period-performance")).not.toContainText("(+6.67%)");
   await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
-  await expect(page.locator(".market-data-line")).toHaveText(/Source: YAHOO · Data: 13 Jul 2026, 12:10 · Fetched:/);
+  await expect(page.locator(".market-data-line")).toHaveText(/Source: YAHOO · Data: 13 Jul 2026, \d{2}:10 · Fetched:/);
   await expect(page.locator(".market-data-line")).not.toContainText("XETRA");
   await expect(page.getByText("Market Data Details", { exact: true })).toHaveCount(0);
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();

@@ -17,6 +17,11 @@ export function formatPercent(value: number | null): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+export function formatPercentInBrackets(value: number | null): string {
+  const formatted = formatPercent(value);
+  return formatted === "Unavailable" ? formatted : `(${formatted})`;
+}
+
 export function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown time";

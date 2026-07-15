@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { BarChart3, ChevronDown, LineChart } from "lucide-react";
 import { buildPortfolioValueHistory } from "../domain/portfolio";
-import { formatMoney, formatPercent } from "../format";
+import { formatMoney, formatPercentInBrackets } from "../format";
 import type { ChartRange, MarketRecord, PositionMetrics } from "../types";
 
 const PortfolioHistoryChart = lazy(() => import("./PortfolioHistoryChart").then((module) => ({ default: module.PortfolioHistoryChart })));
@@ -16,7 +16,7 @@ interface Props {
 
 export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange }: Props) {
   const [open, setOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const [range, setRange] = useState<ChartRange>("1W");
   const basePositions = useMemo(() => positions.filter((position) => position.instrument.currency === baseCurrency), [positions, baseCurrency]);
   const allocation = useMemo(() => basePositions
@@ -37,7 +37,7 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
     onRange(next);
   }
 
-  return <details className="portfolio-insights" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+  return <details className="portfolio-insights" open={open} onToggle={(event) => { const nextOpen = event.currentTarget.open; setOpen(nextOpen); if (nextOpen) setHistoryOpen(true); }}>
     <summary><span><BarChart3 aria-hidden="true" /><span><strong>Portfolio Insights</strong><small>Allocation and portfolio history</small></span></span><ChevronDown className="insights-chevron" aria-hidden="true" /></summary>
     {open && <div className="insights-body">
       <section className="allocation-panel" aria-labelledby="allocation-title">
@@ -57,7 +57,7 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
         {historyOpen && <div className="portfolio-history-body">
           <div className="range-controls" aria-label="Portfolio history range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={(event) => { event.preventDefault(); selectRange(item); }}>{item}</button>)}</div>
           {!complete ? <div className="insight-empty">Complete historical prices are not available for every holding in this range.</div> : !history.length ? <div className="insight-empty">Portfolio history begins after your first order.</div> : <>
-            <p className="portfolio-history-summary">Latest {formatMoney(latest?.marketValue ?? null)}<span className="change-separator" aria-hidden="true">|</span>Change {formatMoney(change)}<span className="change-separator" aria-hidden="true">|</span>{formatPercent(changePercent)}</p>
+            <p className="portfolio-history-summary">Latest {formatMoney(latest?.marketValue ?? null)}<span className="summary-separator" aria-hidden="true">|</span>Change {formatMoney(change)} {formatPercentInBrackets(changePercent)}</p>
             <Suspense fallback={<div className="chart-empty chart-skeleton" role="status">Loading Portfolio Chart…</div>}><PortfolioHistoryChart points={history} /></Suspense>
           </>}
         </div>}

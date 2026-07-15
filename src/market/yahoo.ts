@@ -71,6 +71,15 @@ function previousTradingClose(history: MarketPoint[]): number | null {
   return null;
 }
 
+function marketSession(meta: UnknownRecord, fetchedMs: number): "open" | "closed" | undefined {
+  const periods = meta.currentTradingPeriod;
+  if (!isRecord(periods) || !isRecord(periods.regular)) return undefined;
+  const { start, end } = periods.regular;
+  if (!finitePositive(start) || !finitePositive(end) || !Number.isFinite(fetchedMs)) return undefined;
+  const fetchedSeconds = fetchedMs / 1_000;
+  return fetchedSeconds >= start && fetchedSeconds < end ? "open" : "closed";
+}
+
 export function parseYahooChart(
   instrument: Instrument,
   payload: unknown,
@@ -99,6 +108,10 @@ export function parseYahooChart(
 
   const fetchedMs = Date.parse(fetchedAt);
   const asOfMs = Date.parse(latest.timestamp);
+  const session = instrument.assetType === "ETF" ? marketSession(meta, fetchedMs) : undefined;
+  const delayMinutes = session === "open" && Number.isFinite(fetchedMs) && Number.isFinite(asOfMs)
+    ? Math.max(0, Math.floor((fetchedMs - asOfMs) / 60_000))
+    : null;
   const staleAfterMs = instrument.assetType === "FUND" ? 72 * 60 * 60 * 1_000 : 24 * 60 * 60 * 1_000;
   const timestampedPreviousClose = previousTradingClose(history);
   const previousClose = timestampedPreviousClose ?? (
@@ -121,6 +134,8 @@ export function parseYahooChart(
       source: "yahoo",
       label: instrument.assetType === "FUND" ? "Fund NAV" : "Market Price",
       stale: Number.isFinite(fetchedMs) && fetchedMs - asOfMs > staleAfterMs,
+      marketSession: session,
+      delayMinutes,
     },
     history,
   };

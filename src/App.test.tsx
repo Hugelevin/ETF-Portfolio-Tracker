@@ -87,10 +87,10 @@ describe("portfolio dashboard", () => {
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
     const detail = await screen.findByRole("dialog", { name: /JEDI/ });
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
-    const metricCount = within(detail).getAllByText("+17.14%").length;
+    const metricCount = within(detail).getAllByText("(+17.14%)").length;
     expect(metricCount).toBeGreaterThan(0);
     await user.click(within(detail).getByRole("button", { name: "1D" }));
-    expect(within(detail).getAllByText("+17.14%")).toHaveLength(metricCount);
+    expect(within(detail).getAllByText("(+17.14%)")).toHaveLength(metricCount);
   });
 
   it("shows raw market prices as the default historical chart", async () => {
@@ -203,11 +203,11 @@ describe("portfolio dashboard", () => {
     await user.click(screen.getAllByRole("button", { name: "Open UMMEPSA details" })[0]!);
     const dialog = screen.getByRole("dialog", { name: /UMMEPSA/ });
     expect(await within(dialog).findByText("7-Day Annualised NAV Yield")).toBeInTheDocument();
-    expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
+    expect(within(dialog).getByText("(+5.34%)")).toBeInTheDocument();
     expect(within(dialog).queryByText(/Moneybase's advertised APY/i)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText("APY (%)")).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "1D" }));
-    expect(within(dialog).getByText("+5.34%")).toBeInTheDocument();
+    expect(within(dialog).getByText("(+5.34%)")).toBeInTheDocument();
   });
 
   it("does not present a missing fund APY as a real zero rate", () => {

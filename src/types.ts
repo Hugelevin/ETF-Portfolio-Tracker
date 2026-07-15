@@ -42,6 +42,8 @@ export interface MarketQuote {
   source: MarketSource;
   label: string;
   stale: boolean;
+  marketSession?: "open" | "closed";
+  delayMinutes?: number | null;
 }
 
 export interface MarketPoint {

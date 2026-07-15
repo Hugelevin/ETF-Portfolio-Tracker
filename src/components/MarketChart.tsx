@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Table2 } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { buildPositionValueHistory, calculateChartDomain, downsamplePoints } from "../domain/portfolio";
-import { formatMoney, formatPercent } from "../format";
+import { formatMoney, formatPercentInBrackets } from "../format";
 import type { MarketPoint, PurchaseLot } from "../types";
 import { calculatePriceDomain } from "./chartDomain";
 
@@ -57,7 +57,7 @@ function ChartTooltip({ active, payload, currency, mode }: ChartTooltipProps) {
       <div><dt>Price</dt><dd>{formatMoney(point.price, currency)}</dd></div>
       {mode === "value" && <>
         <div><dt>Holding Value</dt><dd>{point.marketValue === undefined ? "Not Held" : formatMoney(point.marketValue, currency)}</dd></div>
-        <div><dt>Change</dt><dd className={point.change < 0 ? "negative-text" : point.change > 0 ? "positive-text" : ""}>{formatMoney(point.change, currency)}<span className="change-separator" aria-hidden="true">|</span>{formatPercent(point.changePercentage)}</dd></div>
+        <div><dt>Change</dt><dd className={point.change < 0 ? "negative-text" : point.change > 0 ? "positive-text" : ""}>{formatMoney(point.change, currency)} {formatPercentInBrackets(point.changePercentage)}</dd></div>
       </>}
     </dl>
   </div>;
@@ -110,6 +110,12 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     : calculateChartDomain(valueData.map((point) => ({ timestamp: point.timestamp, marketValue: point.marketValue ?? 0, investedValue: point.investedValue ?? 0 })), true), [mode, priceData, valueData]);
   const averageBuyVisible = mode === "price" && averagePurchasePrice > 0
     && averagePurchasePrice >= domain[0] && averagePurchasePrice <= domain[1];
+  const periodValues = (mode === "price"
+    ? priceData.map((point) => point.price)
+    : valueData.flatMap((point) => point.marketValue === undefined ? [] : [point.marketValue]))
+    .filter((value) => Number.isFinite(value));
+  const periodLow = periodValues.length ? Math.min(...periodValues) : null;
+  const periodHigh = periodValues.length ? Math.max(...periodValues) : null;
 
   if (!data.length) {
     const message = mode === "value"
@@ -123,8 +129,11 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     : `Historical holding value and invested cost chart with ${data.length} data points`;
 
   return <>
-    <div className="chart-key" aria-hidden="true">
-      {mode === "price" ? <><span><i className="key-market" /> Market Price</span>{averageBuyVisible && <span><i className="key-invested dashed" /> Average Buy {formatMoney(averagePurchasePrice, currency)}</span>}</> : <><span><i className="key-market" /> Holding Value</span><span><i className="key-invested" /> Invested Cost</span></>}
+    <div className="chart-meta">
+      <div className="chart-key" aria-hidden="true">
+        {mode === "price" ? <><span><i className="key-market" /> Market Price</span>{averageBuyVisible && <span><i className="key-invested dashed" /> Average Buy {formatMoney(averagePurchasePrice, currency)}</span>}</> : <><span><i className="key-market" /> Holding Value</span><span><i className="key-invested" /> Invested Cost</span></>}
+      </div>
+      <dl className="chart-period-stats" aria-label="Selected period range"><div><dt>Low</dt><dd>{formatMoney(periodLow, currency)}</dd></div><div><dt>High</dt><dd>{formatMoney(periodHigh, currency)}</dd></div></dl>
     </div>
     <div className="chart" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
@@ -149,7 +158,7 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     <details className="data-alternative" open={tableOpen} onToggle={(event) => setTableOpen(event.currentTarget.open)}>
       <summary><Table2 aria-hidden="true" /><span>View Chart Data as a Table</span><ChevronDown className="data-chevron" aria-hidden="true" /></summary>
       {tableOpen && <><div className="compact-table">
-        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)}<span className="change-separator" aria-hidden="true">|</span>{formatPercent(point.changePercentage)}</td></tr>)}</tbody></table>}
+        {mode === "price" ? <table aria-label="Historical market prices"><thead><tr><th>Date</th><th>Price</th></tr></thead><tbody>{priceData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td></tr>)}</tbody></table> : <table aria-label="Historical holding values"><thead><tr><th>Date</th><th>Price</th><th>Holding Value</th><th>Invested Cost</th><th>Change</th></tr></thead><tbody>{valueData.slice(0, visibleRows).map((point) => <tr key={point.timestamp}><td>{point.label}</td><td>{formatMoney(point.price, currency)}</td><td>{formatMoney(point.marketValue ?? null, currency)}</td><td>{formatMoney(point.investedValue ?? null, currency)}</td><td>{formatMoney(point.change, currency)} {formatPercentInBrackets(point.changePercentage)}</td></tr>)}</tbody></table>}
       </div>{visibleRows < data.length && <button type="button" className="button secondary show-more-data" onClick={() => setVisibleRows((current) => current + 50)}>Show 50 More Rows</button>}</>}
     </details>
   </>;

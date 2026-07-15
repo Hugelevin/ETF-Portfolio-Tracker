@@ -122,6 +122,15 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 - UMMEPSA uses daily Yahoo fund NAV data. Its displayed 7-day annualised NAV yield is calculated automatically from that history and is informational only.
 - Each quote shows source, provider exchange, market timestamp, fetch timestamp and stale state.
 
+Status badges use Yahoo's timestamp and, for ETFs, its `currentTradingPeriod` metadata:
+
+- **Updating**: a Yahoo request is in progress.
+- **Updated**: Yahoo returned a valid recent price. During an open ETF session, its latest timestamp is no more than 10 minutes behind the fetch time.
+- **Delayed**: the ETF session is open but Yahoo's latest timestamp is more than 10 minutes behind, or the quote is older than the normal freshness limit (24 hours for ETFs; 72 hours for daily fund NAV).
+- **Closed**: Yahoo's regular ETF trading window is currently closed; the latest valid close remains displayed.
+- **Cached**: the current request failed and the last successful browser-cached price is displayed.
+- **Unavailable**: no valid current or cached price exists.
+
 Fallback order is: Yahoo request → cached Yahoo → unavailable.
 
 Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default **Price** chart shows a weighted average purchase-price baseline when it falls inside the visible market range; a distant cost basis never flattens short-term price movement. Its tooltip shows only date and price. The optional **Holding Value** view compares historical holding value with invested cost, excludes broker fees and starts at the first purchase, so it never plots a misleading zero before shares were owned. Its tooltip also shows holding value and change. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.

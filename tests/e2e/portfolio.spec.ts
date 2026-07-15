@@ -89,7 +89,8 @@ test("loads a distinct one-year series and compares value after the first order"
   const valueChartBox = await valueChart.boundingBox();
   expect(valueChartBox).not.toBeNull();
   await page.mouse.move(valueChartBox!.x + valueChartBox!.width * .7, valueChartBox!.y + valueChartBox!.height * .5);
-  await expect(page.locator(".chart-tooltip .change-separator")).toBeVisible();
+  await expect(page.locator(".chart-tooltip")).toContainText(/Change.*\([+-]\d/);
+  await expect(page.locator(".chart-tooltip .change-separator")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Holding Value vs Invested Cost" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await expect(page.getByText("1 Order")).toBeVisible();
@@ -267,7 +268,7 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
 
   await page.getByRole("button", { name: "Close details" }).click();
   await page.locator(".portfolio-insights > summary").click();
-  await page.locator(".portfolio-history > summary").click();
+  await expect(page.locator(".portfolio-history")).toHaveAttribute("open", "");
   const portfolioChart = page.locator(".portfolio-history-chart");
   await portfolioChart.scrollIntoViewIfNeeded();
   const portfolioBox = await portfolioChart.boundingBox();
@@ -275,7 +276,8 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
   await page.mouse.click(portfolioBox!.x + portfolioBox!.width * .65, portfolioBox!.y + portfolioBox!.height * .5);
   await expect(portfolioChart).not.toHaveAttribute("tabindex", "0");
   await expect(portfolioChart.locator(".recharts-surface")).not.toHaveAttribute("tabindex", "0");
-  await expect(page.locator(".portfolio-history-summary .change-separator")).toHaveCount(2);
+  await expect(page.locator(".portfolio-history-summary .summary-separator")).toHaveCount(1);
+  await expect(page.locator(".portfolio-history-summary .change-separator")).toHaveCount(0);
 });
 
 test("prefetches enough history for weekly and monthly performance", async ({ page }) => {
@@ -285,6 +287,41 @@ test("prefetches enough history for weekly and monthly performance", async ({ pa
   await page.getByRole("button", { name: "Open JEDI details" }).click();
   await threeMonthResponse;
   await expect(page.locator(".period-performance")).not.toContainText("Unavailable");
+});
+
+test("keeps unavailable performance intact on desktop", async ({ page }) => {
+  await page.unroute("http://market.test/yahoo/chart**");
+  await page.route("http://market.test/yahoo/chart**", async (route) => {
+    const range = new URL(route.request().url()).searchParams.get("range");
+    const timestamps = (range === "3mo"
+      ? ["2026-07-06T09:00:00Z", "2026-07-13T09:00:00Z"]
+      : ["2026-07-13T10:00:00Z", "2026-07-13T10:10:00Z"])
+      .map((value) => Date.parse(value) / 1_000);
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: timestamps, indicators: { quote: [{ close: range === "3mo" ? [75, 80] : [78, 80] }] } }] } } });
+  });
+  await page.setViewportSize({ width: 1180, height: 850 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  const unavailable = page.locator(".period-performance dd", { hasText: "Unavailable" });
+  await expect(unavailable).toBeVisible();
+  expect(await unavailable.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
+});
+
+test("opens portfolio history and shows compact chart summaries", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.locator(".holding-card .return-chip")).toContainText(/\([+-]\d/);
+  await expect(page.locator(".holding-card .return-chip .change-separator")).toHaveCount(0);
+  expect(await page.locator(".holding-sparkline").evaluate((element) => getComputedStyle(element).borderLeftStyle)).toBe("solid");
+
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await expect(page.locator(".chart-period-stats")).toContainText("Low");
+  await expect(page.locator(".chart-period-stats")).toContainText("High");
+  await page.getByRole("button", { name: "Close details" }).click();
+
+  await page.locator(".portfolio-insights > summary").click();
+  await expect(page.locator(".portfolio-history")).toHaveAttribute("open", "");
+  await expect(page.locator(".portfolio-history-summary")).toContainText(/Change .* \([+-]\d/);
 });
 
 test("aligns mobile recovery button icons and labels", async ({ page }) => {

@@ -68,6 +68,18 @@ describe("parseYahooChart", () => {
     expect(record.quote.previousClose).toBe(79.2);
   });
 
+  it("derives market session and quote delay from Yahoo metadata", () => {
+    const changed = structuredClone(payload);
+    changed.chart.result[0]!.meta = {
+      ...changed.chart.result[0]!.meta,
+      currentTradingPeriod: { regular: { start: 1_783_929_600, end: 1_783_958_400 } },
+    } as typeof changed.chart.result[0]["meta"];
+
+    const record = parseYahooChart(instrument, changed, "2026-07-13T08:18:40.000Z");
+
+    expect(record.quote).toMatchObject({ marketSession: "open", delayMinutes: 2 });
+  });
+
   it.each([
     ["symbol", "JEDI.MI", "symbol"],
     ["currency", "USD", "currency"],

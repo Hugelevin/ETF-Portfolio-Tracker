@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import type { MarketPoint, PositionMetrics } from "../types";
-import { formatMoney, formatNumber, formatPercent } from "../format";
+import { formatMoney, formatNumber, formatPercentInBrackets } from "../format";
 import { HoldingSparkline } from "./HoldingSparkline";
 import { StatusBadge } from "./StatusBadge";
 import { InstrumentLogo } from "./InstrumentLogo";
@@ -56,8 +56,8 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
           <span className="sr-only">Open {position.instrument.ticker} details: </span>
           <span className="holding-performance">
             <strong className="holding-value">{position.currentValue === null ? "Unavailable" : formatMoney(position.currentValue, position.instrument.currency)}</strong>
-            <span className={`return-chip ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}<span className="change-separator" aria-hidden="true">|</span><span>{formatPercent(position.marketReturnPercentage)}</span></span>
-            <span className={`holding-today ${direction(position.dailyChange)}`}>Today {formatMoney(position.dailyChange, position.instrument.currency)}<span className="change-separator" aria-hidden="true">|</span><span>{formatPercent(position.dailyChangePercentage)}</span></span>
+            <span className={`return-chip ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)} <span>{formatPercentInBrackets(position.marketReturnPercentage)}</span></span>
+            <span className={`holding-today ${direction(position.dailyChange)}`}>Today {formatMoney(position.dailyChange, position.instrument.currency)} <span>{formatPercentInBrackets(position.dailyChangePercentage)}</span></span>
           </span>
           <HoldingSparkline history={sparklineHistory(position.instrument.id)} ticker={position.instrument.ticker} />
         </button>
@@ -71,7 +71,7 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
           <td><strong>{position.quote ? formatMoney(position.quote.price, position.instrument.currency) : "Unavailable"}</strong><StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} /></td>
           <td>{formatMoney(position.purchaseCostExcludingFees, position.instrument.currency)}</td>
           <td>{formatMoney(position.currentValue, position.instrument.currency)}</td>
-          <td><span className={`change ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}</span><small>{formatPercent(position.marketReturnPercentage)}</small></td>
+          <td><span className={`change ${direction(position.marketReturn)}`}>{position.marketReturn !== null && <span aria-hidden="true">{position.marketReturn >= 0 ? "▲" : "▼"} </span>}{formatMoney(position.marketReturn, position.instrument.currency)}</span><small>{formatPercentInBrackets(position.marketReturnPercentage)}</small></td>
           <td><div className="row-actions"><button className="icon-button" aria-label={`Open ${position.instrument.ticker} details`} onClick={() => onSelect(position)}><ChevronRight /></button><button className="icon-button danger" aria-label={`Delete ${position.instrument.ticker} holding`} onClick={() => onDelete(position)}><Trash2 /></button></div></td>
         </tr>)}</tbody>
       </table></div>}

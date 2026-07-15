@@ -12,9 +12,11 @@ test.beforeEach(async ({ page }) => {
     const range = new URL(route.request().url()).searchParams.get("range");
     const timestamps = range === "1y"
       ? [Date.parse("2025-08-01T09:00:00Z"), Date.parse("2026-02-02T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
-      : [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
-    const closes = range === "1y" ? [60, 70, 79] : [78, 80];
-    await route.fulfill({ json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: timestamps, indicators: { quote: [{ close: closes }] } }] } } });
+      : range === "3mo"
+        ? [Date.parse("2026-06-01T09:00:00Z"), Date.parse("2026-07-06T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
+        : [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
+    const closes = range === "1y" ? [60, 70, 79] : range === "3mo" ? [70, 75, 80] : [78, 80];
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: timestamps, indicators: { quote: [{ close: closes }] } }] } } });
   });
   await page.addInitScript((portfolio) => {
     localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify(portfolio));
@@ -33,6 +35,7 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.locator(".quote-strip > div")).toHaveCount(4);
   await expect(page.locator(".period-performance")).toContainText("1W");
   await expect(page.locator(".period-performance")).toContainText("1M");
+  await expect(page.locator(".period-performance")).not.toContainText("Unavailable");
   await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   const desktopEdit = page.getByRole("button", { name: "Edit order from 2026-01-02" });
@@ -222,7 +225,7 @@ test("uses a loss theme when the portfolio daily return is negative", async ({ p
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", async (route) => {
     const timestamps = [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
-    await route.fulfill({ json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 80 }, timestamp: timestamps, indicators: { quote: [{ close: [79, 78] }] } }] } } });
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 80 }, timestamp: timestamps, indicators: { quote: [{ close: [79, 78] }] } }] } } });
   });
   await page.goto("/");
   await expect(page.locator(".summary")).toHaveClass(/loss/);
@@ -250,7 +253,7 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
   expect(box).not.toBeNull();
   await page.mouse.move(box!.x + box!.width * .65, box!.y + box!.height * .5);
   await page.mouse.click(box!.x + box!.width * .65, box!.y + box!.height * .5);
-  await expect(page.locator(".chart")).toHaveAttribute("tabindex", "0");
+  await expect(page.locator(".chart")).not.toHaveAttribute("tabindex", "0");
   await expect(page.locator(".chart .recharts-surface")).not.toHaveAttribute("tabindex", "0");
   const blackBoxStyles = await page.locator(".chart .recharts-wrapper").evaluate((wrapper) => {
     const elements = [wrapper, ...wrapper.querySelectorAll("svg, rect, path")];
@@ -261,6 +264,27 @@ test("does not draw black chart boxes during pointer interaction", async ({ page
     }).filter((item) => (item.outline.includes("rgb(0, 0, 0)") || item.stroke === "rgb(0, 0, 0)" || item.fill === "rgb(0, 0, 0)" || item.border.includes("rgb(0, 0, 0)")) && item.width > 200 && item.height > 100);
   });
   expect(blackBoxStyles).toEqual([]);
+
+  await page.getByRole("button", { name: "Close details" }).click();
+  await page.locator(".portfolio-insights > summary").click();
+  await page.locator(".portfolio-history > summary").click();
+  const portfolioChart = page.locator(".portfolio-history-chart");
+  await portfolioChart.scrollIntoViewIfNeeded();
+  const portfolioBox = await portfolioChart.boundingBox();
+  expect(portfolioBox).not.toBeNull();
+  await page.mouse.click(portfolioBox!.x + portfolioBox!.width * .65, portfolioBox!.y + portfolioBox!.height * .5);
+  await expect(portfolioChart).not.toHaveAttribute("tabindex", "0");
+  await expect(portfolioChart.locator(".recharts-surface")).not.toHaveAttribute("tabindex", "0");
+  await expect(page.locator(".portfolio-history-summary .change-separator")).toHaveCount(2);
+});
+
+test("prefetches enough history for weekly and monthly performance", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
+  const threeMonthResponse = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "3mo");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await threeMonthResponse;
+  await expect(page.locator(".period-performance")).not.toContainText("Unavailable");
 });
 
 test("aligns mobile recovery button icons and labels", async ({ page }) => {
@@ -296,6 +320,14 @@ test("does not overflow on the narrowest supported phone", async ({ page }) => {
   expect(purchaseForm).not.toBeNull();
   expect(purchaseDate!.x).toBeGreaterThanOrEqual(purchaseForm!.x);
   expect(purchaseDate!.x + purchaseDate!.width).toBeLessThanOrEqual(purchaseForm!.x + purchaseForm!.width + .5);
+  const dateStyle = await page.getByLabel("Purchase Date").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { paddingLeft: style.paddingLeft, paddingRight: style.paddingRight, minWidth: style.minWidth, maxWidth: style.maxWidth };
+  });
+  expect(dateStyle.paddingLeft).toBe("0px");
+  expect(dateStyle.paddingRight).toBe("0px");
+  expect(dateStyle.minWidth).toBe("0px");
+  expect(dateStyle.maxWidth).toBe("100%");
 });
 
 test("keeps the full-screen detail usable in phone landscape", async ({ page }) => {
@@ -311,9 +343,21 @@ test("keeps the full-screen detail usable in phone landscape", async ({ page }) 
   expect(close!.height).toBeGreaterThanOrEqual(44);
 });
 
+test("keeps the purchase date aligned on tablet", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Add Purchase" }).click();
+
+  const purchaseDate = await page.getByLabel("Purchase Date").boundingBox();
+  const brokerFees = await page.getByLabel(/Broker Fees/).boundingBox();
+  expect(purchaseDate).not.toBeNull();
+  expect(brokerFees).not.toBeNull();
+  expect(Math.abs(purchaseDate!.width - brokerFees!.width)).toBeLessThan(1);
+});
+
 test("shows an explicit rate-limit error without inventing a price", async ({ page }) => {
   await page.unroute("http://market.test/yahoo/chart**");
-  await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, json: { error: "daily request allowance reached" } }));
+  await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, headers: { "access-control-allow-origin": "*" }, json: { error: "daily request allowance reached" } }));
   await page.goto("/");
   await expect(page.locator(".status.unavailable:visible").first()).toBeVisible();
   await expect(page.locator(".fallback-reason:visible").first()).toContainText("Rate limit reached");

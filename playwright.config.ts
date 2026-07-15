@@ -17,5 +17,11 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { ...devices["Pixel 7"] } },
+    {
+      name: "ios-webkit",
+      fullyParallel: false,
+      grep: /does not draw black chart boxes|does not overflow on the narrowest supported phone|keeps the purchase date aligned on tablet/,
+      use: { ...devices["iPhone 13"], browserName: "webkit" },
+    },
   ],
 });

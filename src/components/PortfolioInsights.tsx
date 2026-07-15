@@ -57,7 +57,7 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
         {historyOpen && <div className="portfolio-history-body">
           <div className="range-controls" aria-label="Portfolio history range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={(event) => { event.preventDefault(); selectRange(item); }}>{item}</button>)}</div>
           {!complete ? <div className="insight-empty">Complete historical prices are not available for every holding in this range.</div> : !history.length ? <div className="insight-empty">Portfolio history begins after your first order.</div> : <>
-            <p className="portfolio-history-summary">Latest {formatMoney(latest?.marketValue ?? null)} · Change {formatMoney(change)} {formatPercent(changePercent)}</p>
+            <p className="portfolio-history-summary">Latest {formatMoney(latest?.marketValue ?? null)}<span className="change-separator" aria-hidden="true">|</span>Change {formatMoney(change)}<span className="change-separator" aria-hidden="true">|</span>{formatPercent(changePercent)}</p>
             <Suspense fallback={<div className="chart-empty chart-skeleton" role="status">Loading Portfolio Chart…</div>}><PortfolioHistoryChart points={history} /></Suspense>
           </>}
         </div>}

@@ -101,7 +101,8 @@ export default function App() {
     window.history.pushState({ ...(window.history.state ?? {}), [OVERLAY_STATE]: "detail" }, "", window.location.href);
     setSelectedId(instrumentId);
     const instrument = portfolio.instruments.find((item) => item.id === instrumentId);
-    if (instrument && settings.proxyUrl && !chartRecords[cacheKey(instrumentId, "1M")]) void refreshOne(instrument, "1M");
+    // Three daily months reliably cover both a trailing week and calendar month.
+    if (instrument && settings.proxyUrl && !chartRecords[cacheKey(instrumentId, "3M")]) void refreshOne(instrument, "3M");
   }
 
   function persist(next: PortfolioDocument) { setPortfolio(browserStorage.savePortfolio(next)); }

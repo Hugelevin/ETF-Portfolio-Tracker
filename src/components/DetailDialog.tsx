@@ -42,6 +42,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
   const weekly = calculatePeriodPerformance(metricsHistory, "1W");
   const monthly = calculatePeriodPerformance(metricsHistory, "1M");
   const annualisedYield = calculateAnnualisedYield(metricsHistory, 7);
+  const unavailablePerformance = loading ? "Loading..." : "Unavailable";
   const visibleHistory = useMemo(() => filterHistoryForRange(history, range), [history, range]);
   const instrument = position.instrument;
   const mobileOrders = useMediaQuery("(max-width: 767px)");
@@ -78,7 +79,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           <div><p>Net Return</p><strong className={position.profitLoss !== null && position.profitLoss < 0 ? "negative-text" : "positive-text"}>{formatMoney(position.profitLoss, instrument.currency)}</strong><small>After {formatMoney(position.totalFees, instrument.currency)} Broker Fees</small></div>
         </div> : <div className="quote-strip">
           <div><p>Current Price</p><strong>{formatMoney(position.quote?.price ?? null, instrument.currency)}</strong>{position.dailyChange !== null && <small className={position.dailyChange < 0 ? "negative-text" : "positive-text"}>Today {position.dailyChange >= 0 ? "▲" : "▼"} {formatMoney(position.dailyChange, instrument.currency)} · {formatPercent(position.dailyChangePercentage)}</small>}<StatusBadge quote={position.quote} loading={loading} error={error} /></div>
-          <div><p>Performance</p><dl className="period-performance"><div><dt>1W</dt><dd className={weekly ? (weekly.value < 0 ? "negative-text" : "positive-text") : undefined}>{weekly ? formatPercent(weekly.percentage) : "Unavailable"}</dd></div><div><dt>1M</dt><dd className={monthly ? (monthly.value < 0 ? "negative-text" : "positive-text") : undefined}>{monthly ? formatPercent(monthly.percentage) : "Unavailable"}</dd></div></dl></div>
+          <div><p>Performance</p><dl className="period-performance" aria-live="polite"><div><dt>1W</dt><dd className={weekly ? (weekly.value < 0 ? "negative-text" : "positive-text") : undefined}>{weekly ? formatPercent(weekly.percentage) : unavailablePerformance}</dd></div><div><dt>1M</dt><dd className={monthly ? (monthly.value < 0 ? "negative-text" : "positive-text") : undefined}>{monthly ? formatPercent(monthly.percentage) : unavailablePerformance}</dd></div></dl></div>
           <div><p>Average Purchase Price</p><strong>{formatMoney(position.averagePurchasePrice, instrument.currency)}</strong></div>
           <div><p>Market Return</p><strong className={position.marketReturn !== null ? (position.marketReturn < 0 ? "negative-text" : "positive-text") : undefined}>{formatMoney(position.marketReturn, instrument.currency)}</strong><small>{formatPercent(position.marketReturnPercentage)}</small></div>
         </div>}

@@ -16,7 +16,7 @@ export function PortfolioHistoryChart({ points }: { points: PortfolioValuePoint[
   return <>
     <div className="chart-key" aria-hidden="true"><span><i className="key-market" /> Portfolio Value</span><span><i className="key-invested" /> Invested Capital</span></div>
     <div className="chart portfolio-history-chart" role="img" aria-label={`Portfolio value and invested capital history with ${points.length} complete data points`}>
-      <ResponsiveContainer width="100%" height="100%"><ComposedChart data={data} margin={{ top: 14, right: 8, left: 0, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height="100%"><ComposedChart accessibilityLayer={false} data={data} margin={{ top: 14, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dfe7e4" />
         <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={34} />
         <YAxis domain={domain} tickFormatter={(value: number) => new Intl.NumberFormat("en-GB", { notation: "compact" }).format(value)} tickLine={false} axisLine={false} width={54} />

@@ -33,7 +33,7 @@ jobs:
       - name: Build and run browser tests
         run: |
           pnpm build
-          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright install --with-deps chromium webkit
           pnpm test:e2e
       - name: Build for repository path
         run: pnpm build

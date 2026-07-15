@@ -40,7 +40,8 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.locator(".period-performance")).toContainText("+€5.00");
   await expect(page.locator(".period-performance")).not.toContainText("(+6.67%)");
   await expect(page.locator(".quote-strip").getByText("Market Return", { exact: true })).toBeVisible();
-  await expect(page.locator(".market-data-line")).toContainText(/YAHOO.*XETRA/);
+  await expect(page.locator(".market-data-line")).toHaveText(/Source: YAHOO · Data: 13 Jul 2026, 12:10 · Fetched:/);
+  await expect(page.locator(".market-data-line")).not.toContainText("XETRA");
   await expect(page.getByText("Market Data Details", { exact: true })).toHaveCount(0);
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   const desktopEdit = page.getByRole("button", { name: "Edit order from 2026-01-02" });
@@ -368,8 +369,8 @@ test("does not overflow on the narrowest supported phone", async ({ page }) => {
     const style = getComputedStyle(element);
     return { paddingLeft: style.paddingLeft, paddingRight: style.paddingRight, minWidth: style.minWidth, maxWidth: style.maxWidth };
   });
-  expect(dateStyle.paddingLeft).toBe("0px");
-  expect(dateStyle.paddingRight).toBe("0px");
+  expect(Number.parseFloat(dateStyle.paddingLeft)).toBeGreaterThanOrEqual(10);
+  expect(Number.parseFloat(dateStyle.paddingRight)).toBeGreaterThanOrEqual(10);
   expect(dateStyle.minWidth).toBe("0px");
   expect(dateStyle.maxWidth).toBe("100%");
 });
@@ -397,6 +398,61 @@ test("keeps the purchase date aligned on tablet", async ({ page }) => {
   expect(purchaseDate).not.toBeNull();
   expect(brokerFees).not.toBeNull();
   expect(Math.abs(purchaseDate!.width - brokerFees!.width)).toBeLessThan(1);
+});
+
+test("locks and restores dashboard scrolling while a modal is open", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.goto("/");
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Add Purchase" }).evaluate((button) => (button as HTMLButtonElement).click());
+  const locked = await page.locator("body").evaluate((body) => {
+    const style = getComputedStyle(body);
+    return { position: style.position, overflow: style.overflow, top: style.top };
+  });
+  expect(locked.position).toBe("fixed");
+  expect(locked.overflow).toBe("hidden");
+  await expect.poll(() => page.locator(".purchase-modal").evaluate((modal) => modal.scrollTop)).toBe(0);
+  const lockedScrollPosition = -Number.parseFloat(locked.top);
+  expect(lockedScrollPosition).toBeGreaterThan(0);
+
+  await page.mouse.wheel(0, 600);
+  await expect.poll(async () => -Number.parseFloat(await page.locator("body").evaluate((body) => getComputedStyle(body).top))).toBeCloseTo(lockedScrollPosition, 0);
+
+  await page.getByRole("button", { name: "Close purchase form" }).click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(lockedScrollPosition, 0);
+});
+
+test("uses one close-button treatment across modal types", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const styleOf = (name: string) => page.getByRole("button", { name }).evaluate((button) => {
+    const style = getComputedStyle(button);
+    return { width: style.width, height: style.height, radius: style.borderRadius, border: style.borderStyle };
+  });
+
+  await page.getByRole("button", { name: "Add Purchase" }).click();
+  const purchase = await styleOf("Close purchase form");
+  await page.getByRole("button", { name: "Close purchase form" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settings = await styleOf("Close settings");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  const details = await styleOf("Close details");
+
+  expect(settings).toEqual(purchase);
+  expect(details).toEqual(purchase);
+  expect(Number.parseFloat(details.width)).toBeGreaterThanOrEqual(44);
+});
+
+test("shows matching privacy and market-data footer icons", async ({ page }) => {
+  await page.goto("/");
+  const footerItems = page.locator(".site-footer p");
+  await expect(footerItems).toHaveCount(2);
+  await expect(footerItems.nth(0).locator("svg")).toHaveCount(1);
+  await expect(footerItems.nth(1).locator("svg")).toHaveCount(1);
 });
 
 test("shows an explicit rate-limit error without inventing a price", async ({ page }) => {

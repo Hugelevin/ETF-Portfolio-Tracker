@@ -28,7 +28,7 @@ describe("portfolio dashboard", () => {
     await user.type(within(dialog).getByLabelText("Shares"), "25");
     await user.type(within(dialog).getByLabelText("Purchase Price per Share"), "76.8");
     fireEvent.change(within(dialog).getByLabelText("Purchase Date"), { target: { value: "2026-01-02" } });
-    expect(within(dialog).getByText("€", { selector: ".currency-input > span" })).toBeInTheDocument();
+    expect(within(dialog).getAllByText("€", { selector: ".currency-input > span" })).toHaveLength(2);
     expect(within(dialog).queryByText(/Commission only/i)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Add Purchase" }));
     expect(screen.getByRole("heading", { name: "Holdings" })).toBeInTheDocument();

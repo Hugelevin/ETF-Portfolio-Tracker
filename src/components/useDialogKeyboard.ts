@@ -13,9 +13,9 @@ export function useDialogKeyboard(onClose: () => void, initialSelector?: string)
       const target = initialSelector
         ? dialogRef.current?.querySelector<HTMLElement>(initialSelector)
         : dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-      target?.focus();
+      target?.focus({ preventScroll: true });
     });
-    return () => { cancelAnimationFrame(frame); previous?.focus(); };
+    return () => { cancelAnimationFrame(frame); previous?.focus({ preventScroll: true }); };
   }, [initialSelector]);
 
   function onKeyDown(event: React.KeyboardEvent) {

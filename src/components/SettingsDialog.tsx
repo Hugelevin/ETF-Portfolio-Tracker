@@ -19,7 +19,7 @@ export function SettingsDialog({ value, hasPortfolio, onClose, onSave, onImport,
   const keyboard = useDialogKeyboard(onClose, "[aria-label='Close settings']");
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section ref={keyboard.dialogRef} onKeyDown={keyboard.onKeyDown} className="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <header><div><p className="eyebrow">Preferences and Local Data</p><h2 id="settings-title">Settings</h2></div><button className="icon-button" aria-label="Close settings" onClick={onClose}><X /></button></header>
+    <header><div><p className="eyebrow">Preferences and Local Data</p><h2 id="settings-title">Settings</h2></div><button className="icon-button modal-close" aria-label="Close settings" onClick={onClose}><X /></button></header>
     <form onSubmit={(event) => { event.preventDefault(); onSave(settings); }}>
       <section className="settings-section" aria-labelledby="market-settings-title"><h3 id="market-settings-title">Market Data</h3><label>Cloudflare Worker URL<input type="url" placeholder="https://your-worker.workers.dev" value={settings.proxyUrl} onChange={(event) => setSettings({ ...settings, proxyUrl: event.target.value })} /><small>Required for Yahoo Finance browser requests. The Worker receives instrument symbols only.</small></label></section>
       <section className="settings-section local-data-settings" aria-labelledby="local-data-title"><h3 id="local-data-title">Import, Export and Recovery</h3><p>Exports contain instruments and orders only. Settings and cached prices are excluded.</p><div className="settings-data-actions">

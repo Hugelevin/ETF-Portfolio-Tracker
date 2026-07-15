@@ -6,6 +6,7 @@ import { PurchaseDialog } from "./components/PurchaseDialog";
 import { PortfolioInsights } from "./components/PortfolioInsights";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SummaryCards } from "./components/SummaryCards";
+import { useBodyScrollLock } from "./components/useBodyScrollLock";
 import { SAMPLE_PORTFOLIO } from "./config/samplePortfolio";
 import { createPortfolioStorage, exportPortfolioJson, importPortfolioJson } from "./data/storage";
 import { calculatePortfolioSummary, calculatePosition } from "./domain/portfolio";
@@ -81,6 +82,7 @@ export default function App() {
   }), [portfolio, records]);
   const summary = useMemo(() => calculatePortfolioSummary(positions, portfolio.baseCurrency), [positions, portfolio.baseCurrency]);
   const selected = positions.find((position) => position.instrument.id === selectedId) ?? null;
+  useBodyScrollLock(purchaseOpen || settingsOpen || selected !== null || importPreview !== null);
 
   const closePurchase = useCallback(() => {
     setPurchaseOpen(false);
@@ -250,7 +252,7 @@ export default function App() {
       {!positions.length ? <section className="empty-state"><div className="empty-icon"><ChartNoAxesCombined /></div><p className="eyebrow">Get Started</p><h2>Build Your Portfolio</h2><p>Add a purchase or import your portfolio JSON file to begin tracking your investments.</p><div><button className="button primary" onClick={openPurchase}><Plus /> Add First Purchase</button><button className="button secondary" onClick={() => { persist(SAMPLE_PORTFOLIO); setNotice("Public VanEck sample loaded."); }}>Load Public Sample</button></div></section> : <HoldingsTable positions={positions} loading={loading} errors={errors} sparklineHistory={(instrumentId) => chartRecords[cacheKey(instrumentId, "1W")]?.history ?? chartRecords[cacheKey(instrumentId, "1M")]?.history ?? []} onSelect={(position) => openDetail(position.instrument.id)} onDelete={deleteHolding} />}
       {positions.length > 0 && <PortfolioInsights positions={positions} baseCurrency={portfolio.baseCurrency} getRecord={(instrumentId, range) => chartRecords[cacheKey(instrumentId, range)] ?? null} onRange={(range) => void refreshAll(range, false)} />}
     </main>
-    <footer className="site-footer"><p><ShieldCheck aria-hidden="true" /> Portfolio data remains on this device.</p><p>Market data provided by Yahoo Finance.</p></footer>
+    <footer className="site-footer"><p><ShieldCheck aria-hidden="true" /> Portfolio data remains on this device.</p><p><ChartNoAxesCombined aria-hidden="true" /> Market data provided by Yahoo Finance.</p></footer>
     {purchaseOpen && <PurchaseDialog onClose={closePurchase} onSave={addLot} />}
     {settingsOpen && <SettingsDialog value={settings} hasPortfolio={portfolio.instruments.length > 0} onClose={() => setSettingsOpen(false)} onSave={saveSettings} onImport={(file) => void readImport(file)} onExport={exportData} onClear={() => { if (clearPortfolio()) setSettingsOpen(false); }} />}
     {selected && <Suspense fallback={<div className="modal-backdrop detail-backdrop"><section className="modal detail-modal detail-loading" role="status"><RefreshCw className="spin" /> Loading Holding Details…</section></div>}><DetailDialog position={selected} getRecord={(range) => chartRecords[cacheKey(selected.instrument.id, range)] ?? null} loading={loading.has(selected.instrument.id)} error={errors[selected.instrument.id]} onClose={closeDetail} onRange={(range) => void refreshOne(selected.instrument, range)} onLotSave={saveLot} onLotDelete={deleteLot} /></Suspense>}

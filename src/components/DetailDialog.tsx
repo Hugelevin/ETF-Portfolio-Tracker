@@ -68,7 +68,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
             <p>{instrument.isin} · {instrument.exchange} · {instrument.currency}</p>
           </div>
         </div>
-        <button className="icon-button" aria-label="Close details" onClick={onClose}><X /></button>
+        <button className="icon-button modal-close" aria-label="Close details" onClick={onClose}><X /></button>
       </header>
 
       <div className="detail-body">
@@ -84,7 +84,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           <div><p>Market Return</p><strong className={position.marketReturn !== null ? (position.marketReturn < 0 ? "negative-text" : "positive-text") : undefined}>{formatMoney(position.marketReturn, instrument.currency)}</strong><small>{formatPercentInBrackets(position.marketReturnPercentage)}</small></div>
         </div>}
 
-        {position.quote && <p className="market-data-line" aria-label="Market data details"><span>{position.quote.source.toUpperCase()}</span><span aria-hidden="true">|</span><span>{position.quote.exchange}</span><span aria-hidden="true">|</span><span>Data {formatDateTime(position.quote.asOf)}</span><span aria-hidden="true">|</span><span>Fetched {formatDateTime(position.quote.fetchedAt)}</span></p>}
+        {position.quote && <p className="market-data-line" aria-label="Market data details"><span>Source: {position.quote.source.toUpperCase()}</span><span aria-hidden="true"> · </span><span>Data: {formatDateTime(position.quote.asOf)}</span><span aria-hidden="true"> · </span><span>Fetched: {formatDateTime(position.quote.fetchedAt)}</span></p>}
         {instrument.assetType === "FUND" && position.costBasisWarning && <p className="fund-note"><strong>Review Cost Basis:</strong> {position.costBasisWarning}</p>}
 
         <section className="chart-panel" aria-labelledby="chart-title">
@@ -136,8 +136,8 @@ function LotEditor({ lot, onClose, onSave }: { lot: PurchaseLot; onClose: () => 
 
   return <div className="nested-editor" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <form ref={keyboard.dialogRef as React.RefObject<HTMLFormElement | null>} role="dialog" aria-modal="true" aria-labelledby="edit-lot-title" onSubmit={submit} onKeyDown={(event) => { keyboard.onKeyDown(event); event.stopPropagation(); }}>
-      <div className="section-heading"><h3 id="edit-lot-title">Edit Order</h3><button type="button" className="icon-button" aria-label="Close order editor" onClick={onClose}><X /></button></div>
-      <div className="form-grid"><label>Shares<input name="shares" type="number" step="any" min="0.000001" defaultValue={lot.shares} required /></label><label>Purchase Price<input name="price" type="number" step="any" min="0.000001" defaultValue={lot.pricePerShare} required /></label><label>Purchase Date<input name="date" type="date" defaultValue={lot.purchaseDate} required /></label><label>Broker Fees<span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" step="0.01" min="0" defaultValue={lot.fees} required /></span></label></div>
+      <div className="section-heading"><h3 id="edit-lot-title">Edit Order</h3><button type="button" className="icon-button modal-close" aria-label="Close order editor" onClick={onClose}><X /></button></div>
+      <div className="form-grid"><label>Shares<input name="shares" type="number" step="any" min="0.000001" defaultValue={lot.shares} required /></label><label>Purchase Price<span className="currency-input"><span aria-hidden="true">€</span><input aria-label="Purchase Price" name="price" type="number" step="any" min="0.000001" defaultValue={lot.pricePerShare} required /></span></label><label>Purchase Date<input name="date" type="date" defaultValue={lot.purchaseDate} required /></label><label>Broker Fees<span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" step="0.01" min="0" defaultValue={lot.fees} required /></span></label></div>
       <footer><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" type="submit">Save Changes</button></footer>
     </form>
   </div>;

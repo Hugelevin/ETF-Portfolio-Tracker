@@ -7,8 +7,9 @@ function status(label: string, tone: string, title = label) {
   </span>;
 }
 
-export function StatusBadge({ quote, loading, error }: { quote: MarketQuote | null; loading?: boolean; error?: string }) {
+export function StatusBadge({ quote, loading, error, hideUpdated = false }: { quote: MarketQuote | null; loading?: boolean; error?: string; hideUpdated?: boolean }) {
   if (loading) return status("Updating", "loading", "Fetching Yahoo market data");
+  if (hideUpdated && quote?.source === "yahoo" && quote.marketSession !== "closed" && !quote.stale && !error) return null;
   const badge = !quote
     ? status("Unavailable", "unavailable", "No valid market price is available")
     : quote.source === "cache"

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildPositionValueHistory,
   buildPortfolioValueHistory,
+  buildTimeWeightedReturnSeries,
   calculateAnnualisedYield,
   calculateChartDomain,
+  calculateHistoryPerformance,
+  calculateMoneyWeightedReturn,
   calculatePeriodPerformance,
   calculatePortfolioSummary,
   calculatePosition,
@@ -197,6 +200,7 @@ describe("calculatePortfolioSummary", () => {
     expect(summary.pricedPositions).toBe(1);
     expect(summary.totalPositions).toBe(3);
     expect(summary.dailyChange).toBe(25);
+    expect(summary.dailyChangePercentage).toBeCloseTo(1.2658);
     expect(summary.dailyChangePositions).toBe(1);
     expect(summary.excludedPositionIds).toEqual(["unpriced", "usd"]);
   });
@@ -209,6 +213,7 @@ describe("calculatePortfolioSummary", () => {
     const summary = calculatePortfolioSummary([position], "EUR");
 
     expect(summary.dailyChange).toBeNull();
+    expect(summary.dailyChangePercentage).toBeNull();
     expect(summary.dailyChangePositions).toBe(0);
   });
 });
@@ -302,6 +307,19 @@ describe("buildPortfolioValueHistory", () => {
   });
 });
 
+describe("buildTimeWeightedReturnSeries", () => {
+  it("removes new-order cash flows from chained performance", () => {
+    const result = buildTimeWeightedReturnSeries([
+      { timestamp: "2026-01-01T12:00:00Z", investedValue: 100, marketValue: 100, pricedPositions: 1 },
+      { timestamp: "2026-01-02T12:00:00Z", investedValue: 200, marketValue: 200, pricedPositions: 1 },
+      { timestamp: "2026-01-03T12:00:00Z", investedValue: 200, marketValue: 220, pricedPositions: 1 },
+    ]);
+
+    expect(result[1]?.returnPercentage).toBeCloseTo(0);
+    expect(result[2]?.returnPercentage).toBeCloseTo(10);
+  });
+});
+
 describe("downsamplePoints", () => {
   it("limits visual points while retaining both endpoints", () => {
     const points = Array.from({ length: 195 }, (_, index) => index);
@@ -323,6 +341,79 @@ describe("calculatePeriodPerformance", () => {
     expect(performance?.value).toBeCloseTo(7.2);
     expect(performance?.percentage).toBeCloseTo(10);
     expect(performance?.referenceTimestamp).toBe("2026-07-06T16:30:00.000Z");
+  });
+});
+
+describe("calculateHistoryPerformance", () => {
+  it("measures the exact first-to-last chart range", () => {
+    const performance = calculateHistoryPerformance([
+      { timestamp: "2026-07-01T16:30:00.000Z", close: 100 },
+      { timestamp: "2026-07-08T16:30:00.000Z", close: 110 },
+    ]);
+
+    expect(performance?.value).toBe(10);
+    expect(performance?.percentage).toBeCloseTo(10);
+  });
+
+  it("requires at least two distinct valid prices", () => {
+    expect(calculateHistoryPerformance([{ timestamp: "2026-07-08T16:30:00.000Z", close: 110 }])).toBeNull();
+  });
+
+  it("does not label a partial history as full-year performance", () => {
+    expect(calculateHistoryPerformance([
+      { timestamp: "2026-07-01T16:30:00.000Z", close: 100 },
+      { timestamp: "2026-07-08T16:30:00.000Z", close: 110 },
+    ], "1Y")).toBeNull();
+  });
+});
+
+describe("calculateMoneyWeightedReturn", () => {
+  it("annualises portfolio cash flows before broker fees", () => {
+    const position = calculatePosition(instrument, [
+      { id: "lot", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 25 },
+    ], { ...quote, price: 110, asOf: "2026-01-01T16:30:00.000Z" });
+
+    const result = calculateMoneyWeightedReturn([position], "2026-01-01");
+
+    expect(result?.percentage).toBeCloseTo(10, 5);
+    expect(result?.valuationDate).toBe("2026-01-01");
+  });
+
+  it("returns a valid zero rate when value matches invested capital", () => {
+    const position = calculatePosition(instrument, [
+      { id: "lot", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 0 },
+    ], { ...quote, price: 100, asOf: "2026-01-01T16:30:00.000Z" });
+
+    expect(calculateMoneyWeightedReturn([position], "2026-01-01")?.percentage).toBeCloseTo(0, 5);
+  });
+
+  it("excludes lots purchased after the common valuation date", () => {
+    const position = calculatePosition(instrument, [
+      { id: "old", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 0 },
+      { id: "future", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-01-02", fees: 0 },
+    ], { ...quote, price: 110, asOf: "2026-01-01T16:30:00.000Z" });
+
+    expect(calculateMoneyWeightedReturn([position], "2026-01-01")?.percentage).toBeCloseTo(10, 5);
+  });
+
+  it("stays unavailable when positions use different valuation dates", () => {
+    const secondInstrument = { ...instrument, id: "second", ticker: "TWO" };
+    const first = calculatePosition(instrument, [
+      { id: "one", instrumentId: instrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 0 },
+    ], { ...quote, price: 110, asOf: "2026-01-01T16:30:00.000Z" });
+    const second = calculatePosition(secondInstrument, [
+      { id: "two", instrumentId: secondInstrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 0 },
+    ], { ...quote, instrumentId: secondInstrument.id, price: 110, asOf: "2025-12-31T16:30:00.000Z" });
+
+    expect(calculateMoneyWeightedReturn([first, second])).toBeNull();
+  });
+
+  it("stays unavailable when any current valuation is missing", () => {
+    const position = calculatePosition(instrument, [
+      { id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 0 },
+    ], null);
+
+    expect(calculateMoneyWeightedReturn([position], "2026-01-01")).toBeNull();
   });
 });
 

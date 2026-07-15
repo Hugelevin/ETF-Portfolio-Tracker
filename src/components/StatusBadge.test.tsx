@@ -20,4 +20,13 @@ describe("StatusBadge", () => {
     rerender(<StatusBadge quote={{ ...baseQuote, marketSession: "closed" } as never} />);
     expect(screen.getByText("Closed")).toBeInTheDocument();
   });
+
+  it("can hide routine updated status while preserving exceptions", () => {
+    const quote = { instrumentId: "jedi", price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-15T09:00:00Z", fetchedAt: "2026-07-15T09:18:00Z", source: "yahoo" as const, label: "Market Price", stale: false, marketSession: "open" as const };
+    const { rerender } = render(<StatusBadge quote={quote} hideUpdated />);
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+
+    rerender(<StatusBadge quote={{ ...quote, stale: true }} hideUpdated />);
+    expect(screen.getByText("Stale")).toBeInTheDocument();
+  });
 });

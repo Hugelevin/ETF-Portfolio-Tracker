@@ -90,6 +90,7 @@ export interface PortfolioSummary {
   profitLoss: number;
   profitLossPercentage: number | null;
   dailyChange: number | null;
+  dailyChangePercentage: number | null;
   dailyChangePositions: number;
   pricedPositions: number;
   baseCurrencyPositions: number;

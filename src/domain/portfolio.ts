@@ -1,4 +1,5 @@
 import type {
+  ChartRange,
   Instrument,
   MarketPoint,
   MarketQuote,
@@ -85,6 +86,10 @@ export interface PortfolioValuePoint extends PositionValuePoint {
   pricedPositions: number;
 }
 
+export interface PortfolioReturnPoint extends PortfolioValuePoint {
+  returnPercentage: number;
+}
+
 export interface PeriodPerformance {
   value: number;
   percentage: number;
@@ -96,6 +101,11 @@ export interface AnnualisedYield {
   days: number;
   referenceTimestamp: string;
   latestTimestamp: string;
+}
+
+export interface MoneyWeightedReturn {
+  percentage: number;
+  valuationDate: string;
 }
 
 /**
@@ -179,6 +189,103 @@ export function calculatePeriodPerformance(
   };
 }
 
+/** Returns the first-to-last performance of the exact history shown. */
+export function calculateHistoryPerformance(
+  history: MarketPoint[],
+  range?: ChartRange,
+): PeriodPerformance | null {
+  const sorted = [...history]
+    .filter((point) => Number.isFinite(point.close) && point.close > 0 && Number.isFinite(Date.parse(point.timestamp)))
+    .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  const first = sorted[0];
+  const latest = sorted.at(-1);
+  if (!first || !latest || first.timestamp === latest.timestamp) return null;
+  const coveredDays = (Date.parse(latest.timestamp) - Date.parse(first.timestamp)) / DAY_MS;
+  const minimumCoveredDays: Partial<Record<ChartRange, number>> = {
+    "1W": 4,
+    "1M": 21,
+    "3M": 75,
+    "1Y": 300,
+  };
+  if (range && coveredDays < (minimumCoveredDays[range] ?? 0)) return null;
+  const value = latest.close - first.close;
+  return {
+    value,
+    percentage: (value / first.close) * 100,
+    referenceTimestamp: first.timestamp,
+  };
+}
+
+/**
+ * Calculates an annualised money-weighted return (XIRR) before broker fees.
+ * Purchases are cash outflows and the latest complete valuation is the inflow.
+ */
+export function calculateMoneyWeightedReturn(
+  positions: PositionMetrics[],
+  valuationDate?: string,
+): MoneyWeightedReturn | null {
+  if (!positions.length || positions.some((position) => position.currentValue === null)) return null;
+  const quoteDates = positions.map((position) => position.quote?.asOf.slice(0, 10));
+  if (quoteDates.some((date) => !date || !Number.isFinite(Date.parse(`${date}T00:00:00Z`)))) return null;
+  const resolvedValuationDate = valuationDate ?? quoteDates[0];
+  if (!resolvedValuationDate) return null;
+  // XIRR requires one coherent valuation date. Mixed cached quote dates cannot
+  // be treated as a single terminal portfolio value without historical FX/price reconstruction.
+  if (quoteDates.some((date) => date !== resolvedValuationDate)) return null;
+  const valuationTime = Date.parse(`${resolvedValuationDate}T00:00:00Z`);
+  if (!Number.isFinite(valuationTime)) return null;
+
+  const byDate = new Map<string, number>();
+  for (const position of positions) {
+    for (const lot of position.lots) {
+      if (lot.purchaseDate > resolvedValuationDate) continue;
+      byDate.set(lot.purchaseDate, (byDate.get(lot.purchaseDate) ?? 0) - lot.shares * lot.pricePerShare);
+    }
+  }
+  const currentValue = positions.reduce((sum, position) => {
+    const sharesOwned = position.lots
+      .filter((lot) => lot.purchaseDate <= resolvedValuationDate)
+      .reduce((shareSum, lot) => shareSum + lot.shares, 0);
+    return sum + sharesOwned * (position.quote?.price ?? 0);
+  }, 0);
+  byDate.set(resolvedValuationDate, (byDate.get(resolvedValuationDate) ?? 0) + currentValue);
+  const flows = [...byDate.entries()]
+    .map(([date, amount]) => ({ time: Date.parse(`${date}T00:00:00Z`), amount }))
+    .filter((flow) => Number.isFinite(flow.time) && Number.isFinite(flow.amount))
+    .sort((left, right) => left.time - right.time);
+  if (flows.length < 2 || flows[0]!.time >= valuationTime || !flows.some((flow) => flow.amount < 0) || !flows.some((flow) => flow.amount > 0)) return null;
+
+  const origin = flows[0]!.time;
+  const npv = (rate: number) => flows.reduce((sum, flow) => sum + flow.amount / ((1 + rate) ** ((flow.time - origin) / (365 * DAY_MS))), 0);
+  let low = -0.9999;
+  let high = 10;
+  let lowValue = npv(low);
+  let highValue = npv(high);
+  while (Math.sign(lowValue) === Math.sign(highValue) && high < 1_000_000) {
+    high *= 10;
+    highValue = npv(high);
+  }
+  if (!Number.isFinite(lowValue) || !Number.isFinite(highValue) || Math.sign(lowValue) === Math.sign(highValue)) return null;
+
+  for (let index = 0; index < 120; index += 1) {
+    const middle = (low + high) / 2;
+    const middleValue = npv(middle);
+    if (!Number.isFinite(middleValue)) return null;
+    if (Math.abs(middleValue) < 0.000001) {
+      return { percentage: middle * 100, valuationDate: resolvedValuationDate };
+    }
+    if (Math.sign(middleValue) === Math.sign(lowValue)) {
+      low = middle;
+      lowValue = middleValue;
+    } else {
+      high = middle;
+      highValue = middleValue;
+    }
+  }
+  const rate = (low + high) / 2;
+  return Number.isFinite(rate) ? { percentage: rate * 100, valuationDate: resolvedValuationDate } : null;
+}
+
 export function buildPositionValueHistory(
   lots: PurchaseLot[],
   history: MarketPoint[],
@@ -246,6 +353,25 @@ export function buildPortfolioValueHistory(
   });
 }
 
+/**
+ * Chains sub-period returns after removing net purchases at each point. This
+ * keeps contributions from appearing as investment performance in the chart.
+ */
+export function buildTimeWeightedReturnSeries(
+  points: PortfolioValuePoint[],
+): PortfolioReturnPoint[] {
+  let cumulativeGrowth = 1;
+  return points.map((point, index) => {
+    const previous = points[index - 1];
+    if (previous && previous.marketValue > 0) {
+      const contribution = point.investedValue - previous.investedValue;
+      const periodGrowth = (point.marketValue - contribution) / previous.marketValue;
+      if (Number.isFinite(periodGrowth) && periodGrowth >= 0) cumulativeGrowth *= periodGrowth;
+    }
+    return { ...point, returnPercentage: (cumulativeGrowth - 1) * 100 };
+  });
+}
+
 /** Keeps chart shape while limiting SVG/DOM work. First and last points stay. */
 export function downsamplePoints<T>(points: T[], maximum = 90): T[] {
   if (points.length <= maximum || maximum < 2) return points;
@@ -295,6 +421,14 @@ export function calculatePortfolioSummary(
   const dailyChange = dailyChangePositions.length
     ? dailyChangePositions.reduce((sum, position) => sum + (position.dailyChange ?? 0), 0)
     : null;
+  const dailyCurrentValue = dailyChangePositions.reduce(
+    (sum, position) => sum + (position.currentValue ?? 0),
+    0,
+  );
+  const dailyPreviousValue = dailyChange === null ? null : dailyCurrentValue - dailyChange;
+  const dailyChangePercentage = dailyChange === null || dailyPreviousValue === null || dailyPreviousValue <= 0
+    ? null
+    : (dailyChange / dailyPreviousValue) * 100;
   const nonBaseCurrencyPositionIds = positions
     .filter((position) => position.instrument.currency !== baseCurrency)
     .map((position) => position.instrument.id);
@@ -314,6 +448,7 @@ export function calculatePortfolioSummary(
     profitLossPercentage:
       pricedCost > 0 ? (profitLoss / pricedCost) * 100 : null,
     dailyChange,
+    dailyChangePercentage,
     dailyChangePositions: dailyChangePositions.length,
     pricedPositions: pricedPositions.length,
     baseCurrencyPositions: baseCurrencyPositions.length,

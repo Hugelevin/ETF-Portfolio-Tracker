@@ -77,7 +77,7 @@ describe("portfolio dashboard", () => {
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
     window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({
       "jedi-xetra-eur:3M": { quote: { instrumentId: instrument.id, price: 61, previousClose: 60, currency: "EUR", exchange: "XETRA", asOf: "2026-06-01T10:00:00Z", fetchedAt: "2026-06-01T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-05-25T10:00:00Z", close: 60 }, { timestamp: "2026-06-01T10:00:00Z", close: 61 }] },
-      "jedi-xetra-eur:1Y": { quote: { instrumentId: instrument.id, price: 82, previousClose: 81, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-01T10:00:00Z", close: 70 }, { timestamp: "2026-07-13T10:00:00Z", close: 82 }] },
+      "jedi-xetra-eur:1Y": { quote: { instrumentId: instrument.id, price: 82, previousClose: 81, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2025-07-13T10:00:00Z", close: 70 }, { timestamp: "2026-07-13T10:00:00Z", close: 82 }] },
     }));
 
     render(<App />);
@@ -87,11 +87,14 @@ describe("portfolio dashboard", () => {
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
     const detail = await screen.findByRole("dialog", { name: /JEDI/ });
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
-    const metricCount = within(detail).getAllByText("+17.14%").length;
-    expect(metricCount).toBe(2);
-    expect(within(detail).getAllByText("+€12.00 price change")).toHaveLength(2);
+    expect(within(detail).getByText("Not Enough Data")).toBeInTheDocument();
+    expect(within(detail).getByText("Current value €82.00")).toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "1Y" }));
+    expect(await within(detail).findByText("+17.14%")).toBeInTheDocument();
+    expect(within(detail).getByText("+€12.00 price change")).toBeInTheDocument();
     await user.click(within(detail).getByRole("button", { name: "1D" }));
-    expect(within(detail).getAllByText("+17.14%")).toHaveLength(metricCount);
+    expect(await within(detail).findByText("Not Enough Data")).toBeInTheDocument();
+    expect(within(detail).queryByText("+17.14%")).not.toBeInTheDocument();
   });
 
   it("shows raw market prices as the default historical chart", async () => {

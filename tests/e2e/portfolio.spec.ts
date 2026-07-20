@@ -203,11 +203,14 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(Math.abs((refresh!.y + refresh!.height / 2) - (refreshIcon!.y + refreshIcon!.height / 2))).toBeLessThan(1);
 
   await expect(page.getByRole("img", { name: /JEDI 7-day price trend/ })).toBeVisible();
-  await expect(page.locator(".holding-sparkline svg")).toHaveAttribute("viewBox", "10 0 140 55");
+  await expect(page.locator(".holding-sparkline svg")).toHaveAttribute("viewBox", "0 0 156 66");
   const sparkline = await page.locator(".holding-sparkline svg").boundingBox();
   expect(sparkline).not.toBeNull();
-  expect(sparkline!.width).toBeGreaterThanOrEqual(175);
-  expect(sparkline!.height).toBeGreaterThanOrEqual(88);
+  expect(sparkline!.width).toBeGreaterThanOrEqual(150);
+  expect(sparkline!.height).toBeGreaterThanOrEqual(74);
+  const holdingPerformance = await page.locator(".holding-performance").boundingBox();
+  expect(holdingPerformance).not.toBeNull();
+  expect(holdingPerformance!.width).toBeGreaterThanOrEqual(155);
   const holdingPriceSize = await page.locator(".holding-value").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(holdingPriceSize).toBeLessThanOrEqual(25);
   await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toHaveCount(0);
@@ -419,6 +422,8 @@ test("keeps the purchase date aligned on tablet", async ({ page }) => {
   expect(purchaseDate!.height).toBeLessThanOrEqual(52);
   const purchaseDateFontSize = await page.getByLabel("Purchase Date").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(purchaseDateFontSize).toBeGreaterThanOrEqual(16);
+  const purchaseDateAppearance = await page.getByLabel("Purchase Date").evaluate((element) => getComputedStyle(element).appearance);
+  expect(purchaseDateAppearance).toBe("none");
 });
 
 test("keeps edit order form within the phone viewport", async ({ page }) => {
@@ -438,6 +443,14 @@ test("keeps edit order form within the phone viewport", async ({ page }) => {
   expect(editorLayout.scrollWidth).toBe(editorLayout.clientWidth);
   expect(editorLayout.overflowX).toBe("hidden");
 
+  const editorLabels = await editor.locator(".form-grid > label").evaluateAll((labels) => labels.map((label) => {
+    const box = label.getBoundingClientRect();
+    return { top: box.top, bottom: box.bottom };
+  }));
+  for (let index = 1; index < editorLabels.length; index += 1) {
+    expect(editorLabels[index]!.top - editorLabels[index - 1]!.bottom).toBeLessThanOrEqual(20);
+  }
+
   const date = await editor.getByLabel("Purchase Date").boundingBox();
   const fees = await editor.getByLabel("Broker Fees").boundingBox();
   expect(date).not.toBeNull();
@@ -446,6 +459,8 @@ test("keeps edit order form within the phone viewport", async ({ page }) => {
   expect(Math.abs(date!.height - fees!.height)).toBeLessThan(1);
   const dateFontSize = await editor.getByLabel("Purchase Date").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(dateFontSize).toBeGreaterThanOrEqual(16);
+  const dateAppearance = await editor.getByLabel("Purchase Date").evaluate((element) => getComputedStyle(element).appearance);
+  expect(dateAppearance).toBe("none");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
 });
 

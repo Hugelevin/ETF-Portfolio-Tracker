@@ -23,9 +23,10 @@ interface Props {
   onRange: (range: ChartRange) => void;
   onLotSave: (lot: PurchaseLot) => void;
   onLotDelete: (lot: PurchaseLot) => void;
+  onHoldingDelete: () => void;
 }
 
-export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete }: Props) {
+export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete, onHoldingDelete }: Props) {
   const [range, setRange] = useState<ChartRange>("1W");
   const [chartMode, setChartMode] = useState<ChartMode>("price");
   const [chartReady, setChartReady] = useState(false);
@@ -116,6 +117,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
           </article>)}</div>}
           {hasCollapsedOrders && <button type="button" className={`orders-toggle${showAllOrders ? " expanded" : ""}`} aria-expanded={showAllOrders} aria-controls="orders-list" onClick={() => setShowAllOrders((current) => !current)}><span>{showAllOrders ? "Show Fewer Orders" : `Show All ${position.lots.length} Orders`}</span><ChevronDown aria-hidden="true" /></button>}
         </section>
+        <section className="holding-danger-zone" aria-labelledby="delete-holding-title"><div><h3 id="delete-holding-title">Delete Holding</h3><p>Remove {instrument.ticker} and all {position.lots.length} {position.lots.length === 1 ? "order" : "orders"} from this browser.</p></div><button type="button" className="button danger-button" aria-label={`Delete ${instrument.ticker} holding`} onClick={onHoldingDelete}><Trash2 aria-hidden="true" /> Delete Holding</button></section>
       </div>
 
       {editing && <LotEditor lot={editing} onClose={() => setEditing(null)} onSave={(lot) => { onLotSave(lot); setEditing(null); }} />}

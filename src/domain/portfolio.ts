@@ -90,6 +90,23 @@ export interface PortfolioReturnPoint extends PortfolioValuePoint {
   returnPercentage: number;
 }
 
+export interface MonthlyRiskReturn {
+  month: string;
+  percentage: number;
+}
+
+export interface PortfolioRiskStatistics {
+  maximumDrawdownPercentage: number | null;
+  currentDrawdownPercentage: number | null;
+  highestPortfolioValue: number | null;
+  annualisedVolatilityPercentage: number | null;
+  bestMonth: MonthlyRiskReturn | null;
+  worstMonth: MonthlyRiskReturn | null;
+  averageRecoveryDays: number | null;
+  longestRecoveryDays: number | null;
+  recoveredDrawdowns: number;
+}
+
 export interface PeriodPerformance {
   value: number;
   percentage: number;
@@ -370,6 +387,94 @@ export function buildTimeWeightedReturnSeries(
     }
     return { ...point, returnPercentage: (cumulativeGrowth - 1) * 100 };
   });
+}
+
+/**
+ * Calculates risk from the contribution-neutral return index. Raw portfolio
+ * value is used only for the highest-value statistic, so new orders cannot be
+ * mistaken for performance or recovery.
+ */
+export function calculatePortfolioRiskStatistics(
+  points: PortfolioValuePoint[],
+): PortfolioRiskStatistics {
+  const empty: PortfolioRiskStatistics = {
+    maximumDrawdownPercentage: null,
+    currentDrawdownPercentage: null,
+    highestPortfolioValue: null,
+    annualisedVolatilityPercentage: null,
+    bestMonth: null,
+    worstMonth: null,
+    averageRecoveryDays: null,
+    longestRecoveryDays: null,
+    recoveredDrawdowns: 0,
+  };
+  const sorted = [...points]
+    .filter((point) => Number.isFinite(point.marketValue) && point.marketValue > 0 && Number.isFinite(point.investedValue) && Number.isFinite(Date.parse(point.timestamp)))
+    .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  if (!sorted.length) return empty;
+  if (sorted.length === 1) return { ...empty, highestPortfolioValue: sorted[0]!.marketValue };
+
+  const returnSeries = buildTimeWeightedReturnSeries(sorted);
+  const growth = returnSeries.map((point) => ({
+    timestamp: point.timestamp,
+    value: 1 + point.returnPercentage / 100,
+  }));
+  let peak = growth[0]!.value;
+  let peakTimestamp = growth[0]!.timestamp;
+  let drawdownStart: string | null = null;
+  let maximumDrawdownPercentage = 0;
+  const recoveryDays: number[] = [];
+
+  for (const point of growth.slice(1)) {
+    if (point.value >= peak) {
+      if (drawdownStart) recoveryDays.push((Date.parse(point.timestamp) - Date.parse(drawdownStart)) / DAY_MS);
+      peak = point.value;
+      peakTimestamp = point.timestamp;
+      drawdownStart = null;
+      continue;
+    }
+    if (!drawdownStart) drawdownStart = peakTimestamp;
+    maximumDrawdownPercentage = Math.min(maximumDrawdownPercentage, (point.value / peak - 1) * 100);
+  }
+  const latestGrowth = growth.at(-1)!.value;
+  const currentDrawdownPercentage = (latestGrowth / peak - 1) * 100;
+
+  const periodicReturns = growth.slice(1).flatMap((point, index) => {
+    const previous = growth[index];
+    return previous && previous.value > 0 ? [point.value / previous.value - 1] : [];
+  });
+  const intervals = growth.slice(1).map((point, index) => (Date.parse(point.timestamp) - Date.parse(growth[index]!.timestamp)) / DAY_MS).filter((days) => days > 0);
+  const sortedIntervals = [...intervals].sort((left, right) => left - right);
+  const medianInterval = sortedIntervals.length ? sortedIntervals[Math.floor(sortedIntervals.length / 2)]! : null;
+  let annualisedVolatilityPercentage: number | null = null;
+  if (periodicReturns.length >= 2 && medianInterval) {
+    const mean = periodicReturns.reduce((sum, value) => sum + value, 0) / periodicReturns.length;
+    const variance = periodicReturns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (periodicReturns.length - 1);
+    const periodsPerYear = Math.min(252, 365 / medianInterval);
+    annualisedVolatilityPercentage = Math.sqrt(variance) * Math.sqrt(periodsPerYear) * 100;
+  }
+
+  const monthEnds = new Map<string, { growth: number; timestamp: string }>();
+  for (const point of growth) monthEnds.set(point.timestamp.slice(0, 7), { growth: point.value, timestamp: point.timestamp });
+  const monthlyPoints = [...monthEnds.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const monthlyReturns = monthlyPoints.slice(1).flatMap(([month, point], index): MonthlyRiskReturn[] => {
+    const previous = monthlyPoints[index]?.[1];
+    return previous && previous.growth > 0 ? [{ month, percentage: (point.growth / previous.growth - 1) * 100 }] : [];
+  });
+  const bestMonth = monthlyReturns.reduce<MonthlyRiskReturn | null>((best, item) => !best || item.percentage > best.percentage ? item : best, null);
+  const worstMonth = monthlyReturns.reduce<MonthlyRiskReturn | null>((worst, item) => !worst || item.percentage < worst.percentage ? item : worst, null);
+
+  return {
+    maximumDrawdownPercentage,
+    currentDrawdownPercentage,
+    highestPortfolioValue: Math.max(...sorted.map((point) => point.marketValue)),
+    annualisedVolatilityPercentage,
+    bestMonth,
+    worstMonth,
+    averageRecoveryDays: recoveryDays.length ? recoveryDays.reduce((sum, days) => sum + days, 0) / recoveryDays.length : null,
+    longestRecoveryDays: recoveryDays.length ? Math.max(...recoveryDays) : null,
+    recoveredDrawdowns: recoveryDays.length,
+  };
 }
 
 /** Keeps chart shape while limiting SVG/DOM work. First and last points stay. */

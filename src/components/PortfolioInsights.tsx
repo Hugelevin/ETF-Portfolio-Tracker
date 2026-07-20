@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { BarChart3, ChevronDown, LineChart } from "lucide-react";
-import { buildPortfolioValueHistory, buildTimeWeightedReturnSeries, calculateMoneyWeightedReturn } from "../domain/portfolio";
+import { Activity, BarChart3, ChevronDown, LineChart, RefreshCw } from "lucide-react";
+import { buildPortfolioValueHistory, buildTimeWeightedReturnSeries, calculateMoneyWeightedReturn, calculatePortfolioRiskStatistics } from "../domain/portfolio";
 import { formatMoney, formatPercent, formatPercentInBrackets } from "../format";
 import type { ChartRange, MarketRecord, PositionMetrics } from "../types";
 import type { PortfolioHistoryMode } from "./PortfolioHistoryChart";
@@ -11,14 +11,16 @@ const ranges: ChartRange[] = ["1W", "1M", "3M", "1Y", "MAX"];
 interface Props {
   positions: PositionMetrics[];
   baseCurrency: string;
+  loading: boolean;
   getRecord: (instrumentId: string, range: ChartRange) => MarketRecord | null;
   onRange: (range: ChartRange) => void;
 }
 
-export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange }: Props) {
+export function PortfolioInsights({ positions, baseCurrency, loading, getRecord, onRange }: Props) {
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState<ChartRange>("1W");
   const [historyMode, setHistoryMode] = useState<PortfolioHistoryMode>("value");
+  const [requestedRiskKey, setRequestedRiskKey] = useState("");
   const basePositions = useMemo(() => positions.filter((position) => position.instrument.currency === baseCurrency), [positions, baseCurrency]);
   const allocation = useMemo(() => basePositions
     .filter((position) => position.currentValue !== null)
@@ -35,14 +37,26 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
   const change = latest && first ? latest.marketValue - first.marketValue : null;
   const changePercent = change !== null && first && first.marketValue > 0 ? change / first.marketValue * 100 : null;
   const latestReturn = returnHistory.at(-1)?.returnPercentage ?? null;
+  const riskKey = basePositions.map((position) => position.instrument.id).sort().join("|");
+  const riskHistories = Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, "MAX")?.history ?? []]));
+  const riskLoaded = basePositions.length > 0 && basePositions.every((position) => riskHistories[position.instrument.id]?.length);
+  const riskHistory = useMemo(() => riskLoaded ? buildPortfolioValueHistory(basePositions, riskHistories, baseCurrency) : [], [riskLoaded, basePositions, riskHistories, baseCurrency]);
+  const riskSufficient = riskHistory.length >= 2;
+  const risk = useMemo(() => calculatePortfolioRiskStatistics(riskHistory), [riskHistory]);
 
   function selectRange(next: ChartRange) {
     setRange(next);
     onRange(next);
   }
 
-  return <details className="portfolio-insights" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary><span><BarChart3 aria-hidden="true" /><span><strong>Portfolio Insights</strong><small>Allocation and portfolio history</small></span></span><ChevronDown className="insights-chevron" aria-hidden="true" /></summary>
+  function requestRiskHistory() {
+    if (!riskKey) return;
+    setRequestedRiskKey(riskKey);
+    onRange("MAX");
+  }
+
+  return <details className="portfolio-insights" open={open} onToggle={(event) => { const nextOpen = event.currentTarget.open; setOpen(nextOpen); if (nextOpen && !riskLoaded && requestedRiskKey !== riskKey) requestRiskHistory(); }}>
+    <summary><span><BarChart3 aria-hidden="true" /><span><strong>Portfolio Insights</strong><small>Allocation, history and risk</small></span></span><ChevronDown className="insights-chevron" aria-hidden="true" /></summary>
     {open && <div className="insights-body">
       <section className="allocation-panel" aria-labelledby="allocation-title">
         <div className="insight-heading"><div><p className="eyebrow">Allocation</p><h3 id="allocation-title">Current Value by Holding</h3></div><strong>{formatMoney(total, baseCurrency)}</strong></div>
@@ -67,6 +81,40 @@ export function PortfolioInsights({ positions, baseCurrency, getRecord, onRange 
           </>}
         </div>
       </section>
+
+      <section className="risk-panel" role="region" aria-labelledby="risk-title">
+        <div className="risk-heading"><span><Activity aria-hidden="true" /><span><strong id="risk-title">Risk Statistics</strong><small>Contribution-adjusted, using maximum available history</small></span></span>{!riskLoaded && <button type="button" className="button secondary" onClick={requestRiskHistory} disabled={loading}><RefreshCw className={loading ? "spin" : ""} aria-hidden="true" /> {loading ? "Loading History" : "Retry History"}</button>}</div>
+        {!riskLoaded && <p className="risk-coverage" role="status">Complete historical prices are required for every EUR holding. Statistics remain unavailable until full history loads.</p>}
+        {riskLoaded && !riskSufficient && <p className="risk-coverage" role="status">More historical observations are required before risk statistics can be calculated.</p>}
+        <dl className="risk-grid">
+          <RiskStat label="Maximum Drawdown" value={formatDrawdown(risk.maximumDrawdownPercentage)} detail="Largest peak-to-trough fall" tone="negative" />
+          <RiskStat label="Current Drawdown" value={formatDrawdown(risk.currentDrawdownPercentage)} detail="Distance below previous peak" tone={risk.currentDrawdownPercentage !== null && risk.currentDrawdownPercentage < 0 ? "negative" : "neutral"} />
+          <RiskStat label="Highest Portfolio Value" value={formatMoney(risk.highestPortfolioValue, baseCurrency)} detail="Highest recorded market value" />
+          <RiskStat label="Annualised Volatility" value={risk.annualisedVolatilityPercentage === null ? "Unavailable" : `${risk.annualisedVolatilityPercentage.toFixed(2)}%`} detail="Variation in contribution-adjusted returns" />
+          <div className="risk-stat risk-months"><dt>Best and Worst Month</dt><dd><span className={riskTone(risk.bestMonth?.percentage)}>{risk.bestMonth ? formatPercent(risk.bestMonth.percentage) : "Unavailable"}<small>{formatRiskMonth(risk.bestMonth?.month)}</small></span><span className={riskTone(risk.worstMonth?.percentage)}>{risk.worstMonth ? formatPercent(risk.worstMonth.percentage) : "Unavailable"}<small>{formatRiskMonth(risk.worstMonth?.month)}</small></span></dd></div>
+          <RiskStat label="Recovery Time" value={risk.averageRecoveryDays === null ? "Unavailable" : `${Math.round(risk.averageRecoveryDays)} days average`} detail={risk.averageRecoveryDays === null ? "No completed drawdown yet" : `${risk.recoveredDrawdowns} recovered drawdowns · Longest ${Math.round(risk.longestRecoveryDays ?? 0)} days`} />
+        </dl>
+      </section>
     </div>}
   </details>;
+}
+
+function RiskStat({ label, value, detail, tone = "neutral" }: { label: string; value: string; detail: string; tone?: "negative" | "neutral" }) {
+  return <div className="risk-stat"><dt>{label}</dt><dd className={tone === "negative" ? "negative-text" : undefined}>{value}</dd><small>{detail}</small></div>;
+}
+
+function formatDrawdown(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  return `${Math.abs(value) < .005 ? "0.00" : value.toFixed(2)}%`;
+}
+
+function riskTone(value?: number) {
+  if (value === undefined || value === 0) return undefined;
+  return value < 0 ? "negative-text" : "positive-text";
+}
+
+function formatRiskMonth(month?: string) {
+  if (!month) return "Not enough history";
+  const date = new Date(`${month}-01T00:00:00Z`);
+  return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }

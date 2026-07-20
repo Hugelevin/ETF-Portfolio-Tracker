@@ -10,14 +10,16 @@ const sample = {
 test.beforeEach(async ({ page }) => {
   await page.route("http://market.test/yahoo/chart**", async (route) => {
     const range = new URL(route.request().url()).searchParams.get("range");
-    const timestamps = range === "1y"
+    const timestamps = range === "max"
+      ? ["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30", "2026-07-31"].map((value) => Date.parse(`${value}T09:00:00Z`) / 1_000)
+      : range === "1y"
       ? [Date.parse("2025-08-01T09:00:00Z"), Date.parse("2026-02-02T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
       : range === "3mo"
         ? [Date.parse("2026-06-13T09:00:00Z"), Date.parse("2026-07-06T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
         : range === "1mo"
           ? [Date.parse("2026-06-13T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
         : [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
-    const closes = range === "1y" ? [60, 70, 79] : range === "3mo" ? [70, 75, 80] : range === "1mo" ? [75, 80] : [78, 80];
+    const closes = range === "max" ? [100, 80, 100, 120, 90, 108, 132] : range === "1y" ? [60, 70, 79] : range === "3mo" ? [70, 75, 80] : range === "1mo" ? [75, 80] : [78, 80];
     await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: timestamps, indicators: { quote: [{ close: closes }] } }] } } });
   });
   await page.addInitScript((portfolio) => {
@@ -104,7 +106,7 @@ test("loads a distinct one-year series and compares value after the first order"
   await expect(page.locator(".chart-tooltip .change-separator")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Holding Value vs Invested Cost" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await expect(page.getByText("1 Order")).toBeVisible();
+  await expect(page.getByText("1 Order", { exact: true })).toBeVisible();
 });
 
 test("keeps settings data actions equal and instrument marks contained", async ({ page }) => {
@@ -206,9 +208,10 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(sparkline!.height).toBeGreaterThanOrEqual(64);
   const holdingPriceSize = await page.locator(".holding-value").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(holdingPriceSize).toBeLessThanOrEqual(25);
-  await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "More actions for JEDI" })).toHaveCount(0);
   await expect(page.locator(".holding-card")).toContainText("|");
+  await expect(page.locator(".holding-card")).toContainText("Current Price €80.00");
   await expect(page.locator(".holding-card")).not.toContainText("·");
   const holdingNameStyle = await page.locator(".card-instrument small").evaluate((element) => {
     const style = getComputedStyle(element);
@@ -412,7 +415,7 @@ test("keeps the purchase date aligned on tablet", async ({ page }) => {
   expect(purchaseDate!.height).toBeLessThanOrEqual(52);
 });
 
-test("keeps the delete action in the holding card top-right corner", async ({ page }) => {
+test("moves the delete action from the holding card to detail bottom", async ({ page }) => {
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", async (route) => {
     const now = Math.floor(Date.now() / 1_000);
@@ -420,12 +423,53 @@ test("keeps the delete action in the holding card top-right corner", async ({ pa
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const card = await page.locator(".holding-card").boundingBox();
-  const remove = await page.getByRole("button", { name: "Delete JEDI holding" }).boundingBox();
-  expect(card).not.toBeNull();
-  expect(remove).not.toBeNull();
-  expect(card!.x + card!.width - (remove!.x + remove!.width)).toBeLessThanOrEqual(16);
-  expect(remove!.y - card!.y).toBeLessThanOrEqual(16);
+  await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  const remove = page.getByRole("button", { name: "Delete JEDI holding" });
+  await expect(remove).toBeVisible();
+  await expect(remove.locator("svg")).toHaveCount(1);
+});
+
+test("uses consistent full-screen mobile modals without focusing shares", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const expectFullScreen = async (dialog: ReturnType<typeof page.getByRole>) => {
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeCloseTo(0, 0);
+    expect(box!.y).toBeCloseTo(0, 0);
+    expect(box!.width).toBeCloseTo(390, 0);
+    expect(box!.height).toBeCloseTo(844, 0);
+    expect(await dialog.evaluate((element) => getComputedStyle(element).borderRadius)).toBe("0px");
+  };
+
+  await page.getByRole("button", { name: "Add Purchase" }).click();
+  const purchase = page.getByRole("dialog", { name: "Add an Order" });
+  await expectFullScreen(purchase);
+  await page.getByRole("radio", { name: /JEDI/ }).click();
+  await expect(page.getByLabel("Shares")).not.toBeFocused();
+  await page.getByRole("button", { name: "Close purchase form" }).click();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expectFullScreen(page.getByRole("dialog", { name: "Settings" }));
+  await expect(page.getByText("Private - Local to This Browser")).toBeVisible();
+  await page.getByRole("button", { name: "Close settings" }).click();
+
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await expectFullScreen(page.getByRole("dialog", { name: /JEDI/ }));
+});
+
+test("shows contribution-adjusted risk statistics in portfolio insights", async ({ page }) => {
+  await page.goto("/");
+  const fullHistory = page.waitForResponse((response) => new URL(response.url()).searchParams.get("range") === "max");
+  await page.locator(".portfolio-insights > summary").click();
+  await fullHistory;
+  const risk = page.getByRole("region", { name: "Risk Statistics" });
+  await expect(risk).toBeVisible();
+  for (const label of ["Maximum Drawdown", "Current Drawdown", "Highest Portfolio Value", "Annualised Volatility", "Best and Worst Month", "Recovery Time"]) {
+    await expect(risk.getByText(label, { exact: true })).toBeVisible();
+  }
+  await expect(risk).toContainText("2 recovered drawdowns");
 });
 
 test("orders the overview cards by value, invested, return and today", async ({ page }) => {
@@ -559,7 +603,7 @@ test("uses mobile order cards without horizontal overflow", async ({ page }) => 
   await page.goto("/");
   await page.getByRole("button", { name: "Open JEDI details" }).click();
 
-  await expect(page.getByText("1 Order")).toBeVisible();
+  await expect(page.getByText("1 Order", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Order actions for 2026-01-02")).toBeVisible();
   await expect(page.locator(".order-card:visible").getByText("Each", { exact: true })).toBeVisible();
   await expect(page.locator(".order-card:visible").getByText("2 Jan 2026", { exact: true })).toBeVisible();

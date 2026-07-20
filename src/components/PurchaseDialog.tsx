@@ -10,15 +10,15 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
   const [query, setQuery] = useState("");
   const [instrumentId, setInstrumentId] = useState("");
   const [error, setError] = useState("");
+  const changeButtonRef = useRef<HTMLButtonElement>(null);
   const keyboard = useDialogKeyboard(onClose, "[aria-label='Close purchase form']");
   const options = useMemo(() => VERIFIED_INSTRUMENTS.filter((item) => `${item.ticker} ${item.name} ${item.isin}`.toLowerCase().includes(query.toLowerCase())), [query]);
   const selectedInstrument = useMemo(() => VERIFIED_INSTRUMENTS.find((item) => item.id === instrumentId) ?? null, [instrumentId]);
-  const sharesInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (selectedInstrument) sharesInputRef.current?.focus();
+    // Keep keyboard focus inside the dialog without opening a phone keyboard.
+    if (selectedInstrument) changeButtonRef.current?.focus();
   }, [selectedInstrument]);
-
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -47,9 +47,9 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
         </div> : <div className="selected-instrument" aria-live="polite">
           <InstrumentLogo instrument={selectedInstrument} />
           <span><small>Selected Instrument</small><strong>{selectedInstrument.ticker}</strong><span>{selectedInstrument.name}</span><small>{selectedInstrument.isin} · {selectedInstrument.exchange} · {selectedInstrument.currency}</small></span>
-          <button type="button" className="button secondary compact-button" onClick={() => { setInstrumentId(""); setQuery(""); setError(""); }}>Change</button>
+          <button ref={changeButtonRef} type="button" className="button secondary compact-button" onClick={() => { setInstrumentId(""); setQuery(""); setError(""); }}>Change</button>
         </div>}
-        {selectedInstrument && <div className="order-fields"><p className="form-section-label">Order Details</p><div className="form-grid"><label>Shares<input ref={sharesInputRef} name="shares" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase Price per Share<span className="currency-input"><span aria-hidden="true">€</span><input aria-label="Purchase Price per Share" name="price" type="number" min="0.000001" step="any" inputMode="decimal" required /></span></label><label>Purchase Date<input name="date" type="date" max={toLocalIsoDate()} required /></label><label>Broker Fees <span className="optional">Optional</span><span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" min="0" step="0.01" defaultValue="0" inputMode="decimal" /></span></label></div></div>}
+        {selectedInstrument && <div className="order-fields"><p className="form-section-label">Order Details</p><div className="form-grid"><label>Shares<input name="shares" type="number" min="0.000001" step="any" inputMode="decimal" required /></label><label>Purchase Price per Share<span className="currency-input"><span aria-hidden="true">€</span><input aria-label="Purchase Price per Share" name="price" type="number" min="0.000001" step="any" inputMode="decimal" required /></span></label><label>Purchase Date<input name="date" type="date" max={toLocalIsoDate()} required /></label><label>Broker Fees <span className="optional">Optional</span><span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" min="0" step="0.01" defaultValue="0" inputMode="decimal" /></span></label></div></div>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <footer><button type="button" className="button secondary" onClick={onClose}>Cancel</button>{selectedInstrument && <button type="submit" className="button primary">Add Purchase</button>}</footer>
       </form>

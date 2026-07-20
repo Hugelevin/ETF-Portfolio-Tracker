@@ -8,6 +8,7 @@ import {
   calculateHistoryPerformance,
   calculateMoneyWeightedReturn,
   calculatePeriodPerformance,
+  calculatePortfolioRiskStatistics,
   calculatePortfolioSummary,
   calculatePosition,
   downsamplePoints,
@@ -317,6 +318,68 @@ describe("buildTimeWeightedReturnSeries", () => {
 
     expect(result[1]?.returnPercentage).toBeCloseTo(0);
     expect(result[2]?.returnPercentage).toBeCloseTo(10);
+  });
+});
+
+describe("calculatePortfolioRiskStatistics", () => {
+  const history = [
+    { timestamp: "2026-01-31T12:00:00Z", investedValue: 100, marketValue: 100, pricedPositions: 1 },
+    { timestamp: "2026-02-28T12:00:00Z", investedValue: 100, marketValue: 80, pricedPositions: 1 },
+    { timestamp: "2026-03-31T12:00:00Z", investedValue: 100, marketValue: 100, pricedPositions: 1 },
+    { timestamp: "2026-04-30T12:00:00Z", investedValue: 100, marketValue: 120, pricedPositions: 1 },
+    { timestamp: "2026-05-31T12:00:00Z", investedValue: 100, marketValue: 90, pricedPositions: 1 },
+    { timestamp: "2026-06-30T12:00:00Z", investedValue: 100, marketValue: 108, pricedPositions: 1 },
+    { timestamp: "2026-07-31T12:00:00Z", investedValue: 100, marketValue: 132, pricedPositions: 1 },
+  ];
+
+  it("calculates contribution-adjusted drawdowns, monthly extremes and recoveries", () => {
+    const result = calculatePortfolioRiskStatistics(history);
+
+    expect(result.maximumDrawdownPercentage).toBeCloseTo(-25);
+    expect(result.currentDrawdownPercentage).toBeCloseTo(0);
+    expect(result.highestPortfolioValue).toBe(132);
+    expect(result.annualisedVolatilityPercentage).toBeGreaterThan(0);
+    expect(result.bestMonth).toEqual({ month: "2026-03", percentage: 25 });
+    expect(result.worstMonth).toEqual({ month: "2026-05", percentage: -25 });
+    expect(result.averageRecoveryDays).toBeCloseTo(75.5);
+    expect(result.longestRecoveryDays).toBe(92);
+    expect(result.recoveredDrawdowns).toBe(2);
+  });
+
+  it("keeps unrecovered loss visible as current drawdown", () => {
+    const result = calculatePortfolioRiskStatistics(history.slice(0, -1));
+
+    expect(result.maximumDrawdownPercentage).toBeCloseTo(-25);
+    expect(result.currentDrawdownPercentage).toBeCloseTo(-10);
+    expect(result.recoveredDrawdowns).toBe(1);
+  });
+
+  it("returns unavailable statistics for empty history", () => {
+    expect(calculatePortfolioRiskStatistics([])).toEqual({
+      maximumDrawdownPercentage: null,
+      currentDrawdownPercentage: null,
+      highestPortfolioValue: null,
+      annualisedVolatilityPercentage: null,
+      bestMonth: null,
+      worstMonth: null,
+      averageRecoveryDays: null,
+      longestRecoveryDays: null,
+      recoveredDrawdowns: 0,
+    });
+  });
+
+  it("does not report zero drawdown from a single observation", () => {
+    expect(calculatePortfolioRiskStatistics([history[0]!])).toEqual({
+      maximumDrawdownPercentage: null,
+      currentDrawdownPercentage: null,
+      highestPortfolioValue: 100,
+      annualisedVolatilityPercentage: null,
+      bestMonth: null,
+      worstMonth: null,
+      averageRecoveryDays: null,
+      longestRecoveryDays: null,
+      recoveredDrawdowns: 0,
+    });
   });
 });
 

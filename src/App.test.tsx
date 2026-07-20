@@ -10,13 +10,16 @@ describe("portfolio dashboard", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows an honest empty state and zero price coverage", () => {
+  it("shows an honest empty state and keeps the privacy indicator in settings", async () => {
+    const user = userEvent.setup();
     render(<App />);
-    expect(screen.getByText("Private - Local to This Browser")).toBeInTheDocument();
+    expect(screen.queryByText("Private - Local to This Browser")).not.toBeInTheDocument();
     expect(screen.getByText("Portfolio data remains on this device.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Build Your Portfolio" })).toBeInTheDocument();
     expect(screen.getByLabelText("0 of 0 EUR positions valued")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: ".metric-card.primary strong" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByText("Private - Local to This Browser")).toBeInTheDocument();
   });
 
   it("records a verified purchase with fees defaulting to zero", async () => {

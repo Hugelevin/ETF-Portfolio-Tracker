@@ -33,6 +33,7 @@ svg { width: 19px; height: 19px; stroke-width: 1.8; }
 .toast button svg { width: 20px; height: 20px; }
 main { max-width: 1480px; margin: 0 auto; padding: 3rem max(clamp(1rem, 4vw, 4rem), env(safe-area-inset-right)) calc(5rem + env(safe-area-inset-bottom)) max(clamp(1rem, 4vw, 4rem), env(safe-area-inset-left)); }
 .page-heading { display: flex; justify-content: space-between; gap: 2rem; align-items: end; margin-bottom: 2rem; }
+.page-heading h1 { margin-bottom: 0; }
 .page-heading p:last-child { color: var(--muted); margin-bottom: 0; }
 .eyebrow { color: var(--green); text-transform: uppercase; letter-spacing: .13em; font-size: .72rem; font-weight: 800; margin-bottom: .45rem; }
 .summary { background: linear-gradient(135deg, #103d34, #1d5a4f); color: #fff; border: 1px solid rgba(4,41,33,.16); border-radius: 20px; padding: clamp(1rem, 2vw, 1.5rem); box-shadow: 0 14px 36px rgba(19,61,53,.18); }
@@ -84,7 +85,7 @@ td > strong, td > small { display: block; }
 .logo-axa, .logo-ubs, .logo-spdr, .logo-vaneck, .logo-vanguard { padding: 0; }
 .logo-generic { color: var(--green); background: var(--green-soft); }
 .holding-card { position: relative; padding: .75rem .8rem .45rem; overflow: visible; border: 1px solid var(--line); border-radius: 17px; background: #fff; box-shadow: 0 8px 24px rgba(25,55,47,.07); }
-.holding-card > header { display: grid; grid-template-columns: minmax(0,1fr) auto 44px; gap: .5rem; align-items: start; }
+.holding-card > header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem; align-items: start; }
 .card-instrument { min-width: 0; min-height: 52px; padding: 0; display: flex; align-items: center; gap: .7rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .card-instrument > span:last-child { min-width: 0; display: grid; gap: .12rem; }
 .card-instrument strong { font-size: 1rem; }
@@ -92,8 +93,6 @@ td > strong, td > small { display: block; }
 .holding-card .instrument-logo { width: 52px; height: 52px; border-radius: 13px; }
 .holding-card .status-stack { align-self: start; }
 .holding-card .status { margin-top: .15rem; }
-.holding-delete { grid-column: 3; align-self: start; color: var(--red); }
-.holding-delete:hover { color: var(--red); background: var(--red-soft); border-color: #efcece; }
 .holding-menu, .order-menu { position: relative; }
 .holding-menu summary, .order-menu summary { width: 44px; height: 44px; display: grid; place-items: center; list-style: none; border-radius: 10px; color: var(--ink); cursor: pointer; }
 .holding-menu summary::-webkit-details-marker, .order-menu summary::-webkit-details-marker { display: none; }
@@ -153,7 +152,7 @@ td > strong, td > small { display: block; }
 .insights-chevron { transition: transform .18s ease; }
 .portfolio-insights[open] > summary .insights-chevron { transform: rotate(180deg); }
 .insights-body { padding: 0 1rem 1rem; display: grid; grid-template-columns: minmax(280px,.75fr) minmax(420px,1.25fr); gap: 1rem; }
-.allocation-panel, .portfolio-history { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
+.allocation-panel, .portfolio-history, .risk-panel { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
 .insight-heading { display: flex; align-items: end; justify-content: space-between; gap: .75rem; }
 .insight-heading h3 { margin: 0; font-size: 1rem; }
 .allocation-bars { margin-top: 1rem; display: grid; gap: .75rem; }
@@ -175,6 +174,22 @@ td > strong, td > small { display: block; }
 .portfolio-view-controls { flex: 0 0 auto; }
 .portfolio-history-summary { margin: 0 0 .5rem; color: var(--muted); font-size: .78rem; font-weight: 700; }
 .portfolio-history-chart { height: 250px; }
+.risk-panel { grid-column: 1 / -1; }
+.risk-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.risk-heading > span { min-width: 0; display: flex; align-items: center; gap: .65rem; }
+.risk-heading > span > svg { flex: 0 0 auto; color: var(--green); }
+.risk-heading strong, .risk-heading small { display: block; }
+.risk-heading small { margin-top: .15rem; color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.risk-heading .button { min-height: 44px; flex: 0 0 auto; font-size: .76rem; }
+.risk-coverage { margin: .75rem 0 0; padding: .65rem .75rem; border-radius: 9px; color: var(--amber); background: var(--amber-soft); font-size: .72rem; line-height: 1.4; }
+.risk-grid { margin: 1rem 0 0; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .65rem; }
+.risk-stat { min-width: 0; padding: .8rem; border: 1px solid var(--line); border-radius: 11px; background: #f7faf9; }
+.risk-stat dt { color: var(--muted); font-size: .7rem; font-weight: 750; }
+.risk-stat dd { margin: .35rem 0 0; color: var(--ink); font-size: 1rem; font-weight: 850; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.risk-stat > small { display: block; margin-top: .25rem; color: var(--muted); font-size: .66rem; line-height: 1.35; }
+.risk-months dd { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+.risk-months dd > span { min-width: 0; display: grid; gap: .15rem; font-size: .9rem; }
+.risk-months dd small { color: var(--muted); font-size: .64rem; font-weight: 600; }
 .insight-empty { min-height: 190px; display: grid; place-items: center; padding: 1rem; color: var(--muted); text-align: center; }
 .data-tools { margin-top: 2.5rem; padding: 1.3rem 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 2rem; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.65); }
 .data-tools h2 { margin-bottom: .35rem; font-size: 1.15rem; }
@@ -231,6 +246,12 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .form-error { color: var(--red); background: var(--red-soft); padding: .7rem; border-radius: 8px; margin-top: 1rem; }
 .settings-modal form > label { display: block; margin-bottom: 1rem; }
+.privacy-indicator { padding: .7rem .8rem; display: flex; align-items: center; gap: .65rem; border: 1px solid #b8d6cd; border-radius: 10px; color: var(--green-dark); background: var(--green-soft); }
+.privacy-indicator > svg { flex: 0 0 auto; width: 20px; height: 20px; }
+.privacy-indicator strong, .privacy-indicator small { display: block; }
+.privacy-indicator strong { font-size: .8rem; }
+.privacy-indicator small { margin-top: .12rem; color: var(--muted); font-size: .68rem; line-height: 1.35; }
+.privacy-indicator + .settings-section { margin-top: 1rem; }
 .settings-section + .settings-section { margin-top: 1.4rem; padding-top: 1.4rem; border-top: 1px solid var(--line); }
 .settings-section h3 { margin: 0 0 .8rem; }
 .settings-section > p { color: var(--muted); font-size: .82rem; line-height: 1.45; }
@@ -323,6 +344,10 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .orders-toggle { min-height: 44px; margin: .7rem auto 0; padding: .55rem .8rem; display: flex; align-items: center; justify-content: center; gap: .4rem; border: 1px solid var(--line); border-radius: 9px; color: var(--green-dark); background: #fff; font-size: .76rem; font-weight: 800; }
 .orders-toggle svg { width: 17px; height: 17px; transition: transform .15s ease; }
 .orders-toggle.expanded svg { transform: rotate(180deg); }
+.holding-danger-zone { margin-top: 1.5rem; padding: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid #edcece; border-radius: 14px; background: #fffafa; }
+.holding-danger-zone h3 { margin: 0; color: var(--red); font-size: .95rem; }
+.holding-danger-zone p { margin: .25rem 0 0; color: var(--muted); font-size: .72rem; line-height: 1.4; }
+.holding-danger-zone .button { flex: 0 0 auto; }
 .nested-editor { position: fixed; inset: 0; z-index: 100; background: rgba(16,34,29,.68); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 1rem; overflow: auto; }
 .nested-editor form { width: min(600px, 100%); max-height: calc(100dvh - 2rem); overflow: auto; padding: 0; background: #fff; border-radius: 16px; box-shadow: 0 24px 70px rgba(4,25,20,.35); }
 .nested-editor .section-heading { padding: 1rem 1.4rem; margin: 0; border-bottom: 1px solid var(--line); }
@@ -340,6 +365,7 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .data-tools { align-items: flex-start; flex-direction: column; }
   .data-tools .tool-actions { width: 100%; flex-basis: auto; }
   .insights-body { grid-template-columns: 1fr; }
+  .risk-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (max-width: 1100px) {
   .holdings-desktop { display: none; }
@@ -384,7 +410,7 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .summary-status small { font-size: .7rem; }
   .portfolio-insights > summary { min-height: 56px; padding: .7rem .8rem; }
   .insights-body { padding: 0 .7rem .7rem; }
-  .allocation-panel, .portfolio-history { padding: .8rem; }
+  .allocation-panel, .portfolio-history, .risk-panel { padding: .8rem; }
   .portfolio-history { padding: 0; }
   .portfolio-history-body { padding: 0 .8rem .8rem; }
   .portfolio-history-controls { align-items: stretch; flex-direction: column; }
@@ -403,11 +429,10 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .settings-data-actions .button { display: grid; grid-template-columns: 20px 112px; align-items: center; justify-content: center; column-gap: .6rem; text-align: left; }
   .settings-data-actions .button svg { width: 20px; height: 20px; justify-self: center; }
   .modal-backdrop { padding: 0; place-items: end stretch; }
-  .modal { width: 100%; max-height: 94vh; border-radius: 18px 18px 0 0; }
-  .modal form > footer, .modal > footer { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
-  .purchase-modal { max-height: 100dvh; }
-  .purchase-modal form { padding: 1rem; }
-  .purchase-modal form > footer { position: sticky; bottom: 0; z-index: 2; margin: 1rem -1rem -1rem; padding: .85rem 1rem calc(.85rem + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
+  .modal { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .modal > header { flex: 0 0 auto; padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem; }
+  .modal > form { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1rem; display: flex; flex-direction: column; }
+  .modal form > footer { position: sticky; bottom: 0; z-index: 2; margin: auto -1rem -1rem; padding: .85rem 1rem calc(.85rem + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
   .purchase-modal form > footer .button { min-height: 48px; }
   .selected-instrument { grid-template-columns: 48px minmax(0,1fr); }
   .selected-instrument .instrument-logo { width: 48px; height: 48px; border-radius: 12px; }
@@ -445,8 +470,18 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
   .orders-table { display: none; }
   .order-cards { display: grid; gap: .55rem; }
   .orders-toggle { width: 100%; }
+  .holding-danger-zone { margin-top: 1rem; align-items: stretch; flex-direction: column; }
+  .holding-danger-zone .button { width: 100%; }
+  .risk-heading { align-items: stretch; flex-direction: column; }
+  .risk-heading .button { width: 100%; }
+  .risk-grid { grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .risk-stat { padding: .7rem; }
+  .risk-stat dd { font-size: .9rem; }
+  .confirm-modal { padding: 0; }
+  .confirm-modal > p { flex: 1 1 auto; margin: 0; padding: 1rem; overflow-y: auto; }
+  .confirm-modal > footer { flex: 0 0 auto; margin: 0; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); }
   .nested-editor { place-items: end stretch; padding: 0; }
-  .nested-editor form { width: 100%; max-height: 92dvh; border-radius: 18px 18px 0 0; }
+  .nested-editor form { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
   .nested-editor .form-grid { grid-template-columns: 1fr; }
   .nested-editor form > footer { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 }

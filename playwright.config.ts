@@ -20,7 +20,7 @@ export default defineConfig({
     {
       name: "ios-webkit",
       fullyParallel: false,
-      grep: /does not draw black chart boxes|does not overflow on the narrowest supported phone|keeps the purchase date aligned on tablet/,
+      grep: /does not draw black chart boxes|does not overflow on the narrowest supported phone|keeps the purchase date aligned on tablet|uses consistent full-screen mobile modals/,
       use: { ...devices["iPhone 13"], browserName: "webkit" },
     },
   ],

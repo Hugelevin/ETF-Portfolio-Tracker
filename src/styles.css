@@ -147,6 +147,7 @@ td > strong, td > small { display: block; }
 .portfolio-insights > summary { min-height: 60px; padding: .75rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; list-style: none; cursor: pointer; }
 .portfolio-insights > summary::-webkit-details-marker { display: none; }
 .portfolio-insights > summary > span { display: flex; align-items: center; gap: .7rem; }
+.portfolio-insights > summary > span > svg { color: var(--green); }
 .portfolio-insights > summary strong { display: block; }
 .portfolio-insights > summary small { display: block; margin-top: .12rem; color: var(--muted); font-size: .75rem; }
 .insights-chevron { transition: transform .18s ease; }
@@ -226,7 +227,7 @@ label small { color: var(--muted); font-weight: 400; line-height: 1.4; display: 
 .input-with-icon { position: relative; }
 .input-with-icon svg { position: absolute; top: 16px; left: 12px; color: var(--muted); }
 .input-with-icon input { padding-left: 2.5rem; }
-.instrument-options { border: 0; padding: 0; margin: 1.2rem 0 0; }
+.instrument-options { border: 0; padding: 0; margin: 0; }
 .instrument-options legend { margin-bottom: .6rem; }
 .instrument-option { display: flex; gap: .7rem; padding: .75rem; border: 1px solid var(--line); border-radius: 10px; margin-bottom: .5rem; cursor: pointer; }
 .instrument-option.selected { border-color: #6da095; background: #f1f8f5; }

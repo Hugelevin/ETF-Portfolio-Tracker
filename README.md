@@ -143,7 +143,7 @@ The application logo, favicon and simplified issuer wordmarks are bundled as SVG
 
 ## Import, Export and Initial Holdings
 
-- **Add Purchase** records individual lots and combines them into one position.
+- **Add Order** records individual lots and combines them into one position.
 - **Portfolio Insights** provides an optional allocation view and complete-coverage portfolio history without cluttering the main dashboard.
 - **Export JSON** includes only the versioned portfolio document.
 - **Import JSON** validates the entire file and shows a replacement preview before changing local data.

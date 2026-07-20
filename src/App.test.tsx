@@ -25,15 +25,15 @@ describe("portfolio dashboard", () => {
   it("records a verified purchase with fees defaulting to zero", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Add First Purchase" }));
-    const dialog = screen.getByRole("dialog", { name: "Add an Order" });
+    await user.click(screen.getByRole("button", { name: "Add First Order" }));
+    const dialog = screen.getByRole("dialog", { name: "Add Order" });
     await user.click(within(dialog).getByRole("radio", { name: /ANAU/ }));
     await user.type(within(dialog).getByLabelText("Shares"), "25");
     await user.type(within(dialog).getByLabelText("Purchase Price per Share"), "76.8");
     fireEvent.change(within(dialog).getByLabelText("Purchase Date"), { target: { value: "2026-01-02" } });
     expect(within(dialog).getAllByText("€", { selector: ".currency-input > span" })).toHaveLength(2);
     expect(within(dialog).queryByText(/Commission only/i)).not.toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", { name: "Add Purchase" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add Order" }));
     expect(screen.getByRole("heading", { name: "Holdings" })).toBeInTheDocument();
     expect(screen.getByText("ANAU", { selector: "td strong" })).toBeInTheDocument();
     expect(window.localStorage.getItem("etf-tracker.portfolio.v1")).toContain('"fees":0');

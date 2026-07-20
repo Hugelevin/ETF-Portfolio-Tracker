@@ -47,7 +47,7 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
           </span>
           <HoldingSparkline history={sparklineHistory(position.instrument.id)} ticker={position.instrument.ticker} />
         </button>
-        <footer><span>{formatNumber(position.totalShares)} shares <b>|</b> Current Price {position.quote ? formatMoney(position.quote.price, position.instrument.currency) : "Unavailable"}</span><button type="button" onClick={() => onSelect(position)}>Details <ChevronRight aria-hidden="true" /></button></footer>
+        <footer><span>{formatNumber(position.totalShares)} shares at {position.quote ? `${formatMoney(position.quote.price, position.instrument.currency)} each` : "unavailable price"}</span><button type="button" onClick={() => onSelect(position)}>Details <ChevronRight aria-hidden="true" /></button></footer>
       </article>)}</div>
       : <div className="table-shell holdings-desktop"><table>
         <thead><tr><th scope="col">Instrument</th><th scope="col">Shares</th><th scope="col">Price</th><th scope="col">Today</th><th scope="col">Invested</th><th scope="col">Value</th><th scope="col">Market Return</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>

@@ -65,15 +65,16 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Close details" })).toBeVisible();
 });
 
-test("purchase form is keyboard reachable", async ({ page }) => {
+test("order form is keyboard reachable", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Add Purchase" }).focus();
+  await page.getByRole("button", { name: "Add Order" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Close purchase form" })).toBeFocused();
-  await expect(page.getByLabel("Find an Instrument")).not.toBeFocused();
+  await expect(page.getByRole("dialog", { name: "Add Order" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close order form" })).toBeFocused();
+  await expect(page.getByRole("group", { name: "Select Instrument" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Add Order" })).toBeHidden();
 });
 
 test("loads a distinct one-year series and compares value after the first order", async ({ page }) => {
@@ -169,7 +170,7 @@ test("keeps the mobile brand and add action balanced", async ({ page }) => {
   await page.goto("/");
 
   const brand = await page.locator(".brand img").boundingBox();
-  const add = await page.getByRole("button", { name: "Add Purchase" }).boundingBox();
+  const add = await page.getByRole("button", { name: "Add Order" }).boundingBox();
   expect(brand).not.toBeNull();
   expect(add).not.toBeNull();
   expect(brand!.width).toBeGreaterThan(170);
@@ -202,6 +203,7 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(Math.abs((refresh!.y + refresh!.height / 2) - (refreshIcon!.y + refreshIcon!.height / 2))).toBeLessThan(1);
 
   await expect(page.getByRole("img", { name: /JEDI 7-day price trend/ })).toBeVisible();
+  await expect(page.locator(".holding-sparkline svg")).toHaveAttribute("viewBox", "10 0 140 55");
   const sparkline = await page.locator(".holding-sparkline svg").boundingBox();
   expect(sparkline).not.toBeNull();
   expect(sparkline!.width).toBeGreaterThanOrEqual(140);
@@ -210,8 +212,8 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(holdingPriceSize).toBeLessThanOrEqual(25);
   await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "More actions for JEDI" })).toHaveCount(0);
-  await expect(page.locator(".holding-card")).toContainText("|");
-  await expect(page.locator(".holding-card")).toContainText("Current Price €80.00");
+  await expect(page.locator(".holding-card")).toContainText("25 shares at €80.00 each");
+  await expect(page.locator(".holding-card footer")).not.toContainText("|");
   await expect(page.locator(".holding-card")).not.toContainText("·");
   const holdingNameStyle = await page.locator(".card-instrument small").evaluate((element) => {
     const style = getComputedStyle(element);
@@ -220,6 +222,8 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   expect(holdingNameStyle.whiteSpace).toBe("normal");
   expect(holdingNameStyle.textOverflow).not.toBe("ellipsis");
   await expect(page.locator("main > .holdings-section + .portfolio-insights")).toHaveCount(1);
+  const insightsIconColour = await page.locator(".portfolio-insights > summary > span > svg").evaluate((element) => getComputedStyle(element).color);
+  expect(insightsIconColour).toBe("rgb(40, 111, 99)");
 
   await page.getByRole("button", { name: "Open JEDI details" }).click();
   await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
@@ -365,9 +369,9 @@ test("does not overflow on the narrowest supported phone", async ({ page }) => {
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBe(0);
-  await expect(page.getByRole("button", { name: "Add Purchase" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Order" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Add Purchase" }).click();
+  await page.getByRole("button", { name: "Add Order" }).click();
   await page.getByRole("radio", { name: /JEDI/ }).evaluate((radio) => (radio as HTMLInputElement).click());
   await expect(page.getByLabel("Purchase Date")).toBeVisible();
   const purchaseDate = await page.getByLabel("Purchase Date").boundingBox();
@@ -402,7 +406,7 @@ test("keeps the full-screen detail usable in phone landscape", async ({ page }) 
 test("keeps the purchase date aligned on tablet", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Add Purchase" }).click();
+  await page.getByRole("button", { name: "Add Order" }).click();
   await page.getByRole("radio", { name: /JEDI/ }).evaluate((radio) => (radio as HTMLInputElement).click());
   await expect(page.getByLabel("Purchase Date")).toBeVisible();
 
@@ -443,12 +447,12 @@ test("uses consistent full-screen mobile modals without focusing shares", async 
     expect(await dialog.evaluate((element) => getComputedStyle(element).borderRadius)).toBe("0px");
   };
 
-  await page.getByRole("button", { name: "Add Purchase" }).click();
-  const purchase = page.getByRole("dialog", { name: "Add an Order" });
+  await page.getByRole("button", { name: "Add Order" }).click();
+  const purchase = page.getByRole("dialog", { name: "Add Order" });
   await expectFullScreen(purchase);
   await page.getByRole("radio", { name: /JEDI/ }).click();
   await expect(page.getByLabel("Shares")).not.toBeFocused();
-  await page.getByRole("button", { name: "Close purchase form" }).click();
+  await page.getByRole("button", { name: "Close order form" }).click();
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expectFullScreen(page.getByRole("dialog", { name: "Settings" }));
@@ -511,7 +515,7 @@ test("locks and restores dashboard scrolling while a modal is open", async ({ pa
   const before = await page.evaluate(() => window.scrollY);
   expect(before).toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "Add Purchase" }).evaluate((button) => (button as HTMLButtonElement).click());
+  await page.getByRole("button", { name: "Add Order" }).evaluate((button) => (button as HTMLButtonElement).click());
   const locked = await page.locator("body").evaluate((body) => {
     const style = getComputedStyle(body);
     return { position: style.position, overflow: style.overflow, top: style.top };
@@ -525,7 +529,7 @@ test("locks and restores dashboard scrolling while a modal is open", async ({ pa
   await page.mouse.wheel(0, 600);
   await expect.poll(async () => -Number.parseFloat(await page.locator("body").evaluate((body) => getComputedStyle(body).top))).toBeCloseTo(lockedScrollPosition, 0);
 
-  await page.getByRole("button", { name: "Close purchase form" }).click();
+  await page.getByRole("button", { name: "Close order form" }).click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(lockedScrollPosition, 0);
 });
 
@@ -537,9 +541,9 @@ test("uses one close-button treatment across modal types", async ({ page }) => {
     return { width: style.width, height: style.height, radius: style.borderRadius, border: style.borderStyle };
   });
 
-  await page.getByRole("button", { name: "Add Purchase" }).click();
-  const purchase = await styleOf("Close purchase form");
-  await page.getByRole("button", { name: "Close purchase form" }).click();
+  await page.getByRole("button", { name: "Add Order" }).click();
+  const purchase = await styleOf("Close order form");
+  await page.getByRole("button", { name: "Close order form" }).click();
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = await styleOf("Close settings");
   await page.getByRole("button", { name: "Close settings" }).click();
@@ -591,10 +595,10 @@ test("browser back closes detail and purchase sheets before leaving dashboard", 
   await expect(page.getByRole("dialog", { name: /JEDI/ })).toBeHidden();
   expect(page.url()).toBe(dashboardUrl);
 
-  await page.getByRole("button", { name: "Add Purchase" }).click();
-  await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeVisible();
+  await page.getByRole("button", { name: "Add Order" }).click();
+  await expect(page.getByRole("dialog", { name: "Add Order" })).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole("dialog", { name: "Add an Order" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Add Order" })).toBeHidden();
   expect(page.url()).toBe(dashboardUrl);
 });
 

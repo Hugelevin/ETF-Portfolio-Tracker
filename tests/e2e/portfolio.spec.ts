@@ -206,8 +206,8 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   await expect(page.locator(".holding-sparkline svg")).toHaveAttribute("viewBox", "10 0 140 55");
   const sparkline = await page.locator(".holding-sparkline svg").boundingBox();
   expect(sparkline).not.toBeNull();
-  expect(sparkline!.width).toBeGreaterThanOrEqual(140);
-  expect(sparkline!.height).toBeGreaterThanOrEqual(64);
+  expect(sparkline!.width).toBeGreaterThanOrEqual(175);
+  expect(sparkline!.height).toBeGreaterThanOrEqual(88);
   const holdingPriceSize = await page.locator(".holding-value").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(holdingPriceSize).toBeLessThanOrEqual(25);
   await expect(page.getByRole("button", { name: "Delete JEDI holding" })).toHaveCount(0);
@@ -417,6 +417,36 @@ test("keeps the purchase date aligned on tablet", async ({ page }) => {
   expect(Math.abs(purchaseDate!.width - brokerFees!.width)).toBeLessThan(1);
   expect(Math.abs(purchaseDate!.height - brokerFees!.height)).toBeLessThan(1);
   expect(purchaseDate!.height).toBeLessThanOrEqual(52);
+  const purchaseDateFontSize = await page.getByLabel("Purchase Date").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+  expect(purchaseDateFontSize).toBeGreaterThanOrEqual(16);
+});
+
+test("keeps edit order form within the phone viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open JEDI details" }).click();
+  await page.getByLabel("Order actions for 2026-01-02").click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+
+  const editor = page.getByRole("dialog", { name: "Edit Order" });
+  await expect(editor).toBeVisible();
+  const editorLayout = await editor.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    overflowX: getComputedStyle(element).overflowX,
+  }));
+  expect(editorLayout.scrollWidth).toBe(editorLayout.clientWidth);
+  expect(editorLayout.overflowX).toBe("hidden");
+
+  const date = await editor.getByLabel("Purchase Date").boundingBox();
+  const fees = await editor.getByLabel("Broker Fees").boundingBox();
+  expect(date).not.toBeNull();
+  expect(fees).not.toBeNull();
+  expect(Math.abs(date!.width - fees!.width)).toBeLessThan(1);
+  expect(Math.abs(date!.height - fees!.height)).toBeLessThan(1);
+  const dateFontSize = await editor.getByLabel("Purchase Date").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+  expect(dateFontSize).toBeGreaterThanOrEqual(16);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
 });
 
 test("moves the delete action from the holding card to detail bottom", async ({ page }) => {

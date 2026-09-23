@@ -26,26 +26,42 @@ function endpoint(proxyUrl: string, path: string): URL {
 }
 
 async function fetchJson(url: URL, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(url, init);
-  let body: unknown;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  init?.signal?.addEventListener("abort", onAbort, { once: true });
+  if (init?.signal?.aborted) controller.abort();
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 15_000);
   try {
-    body = await response.json();
-  } catch {
-    throw new Error("Market provider returned an invalid response");
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (response.status === 429) throw new Error("Rate limit reached. Wait a moment, then try Refresh Prices again.");
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      throw new Error(response.ok ? "Market provider returned an invalid response" : `Market request failed (${response.status}). Try again later.`);
+    }
+    if (!response.ok) {
+      const message = typeof body === "object" && body && "error" in body
+        ? String((body as { error: unknown }).error)
+        : `Market request failed (${response.status})`;
+      throw new Error(message);
+    }
+    return body;
+  } catch (error) {
+    if (timedOut) throw new Error("Market request timed out. Try Refresh Prices again.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    init?.signal?.removeEventListener("abort", onAbort);
   }
-  if (!response.ok) {
-    const message = typeof body === "object" && body && "error" in body
-      ? String((body as { error: unknown }).error)
-      : `Market request failed (${response.status})`;
-    throw new Error(response.status === 429 ? `Rate limit reached: ${message}` : message);
-  }
-  return body;
 }
 
 export async function fetchYahooRecord(
   instrument: Instrument,
   range: ChartRange,
   proxyUrl: string,
+  signal?: AbortSignal,
 ): Promise<MarketRecord> {
   if (!instrument.yahooSymbol) throw new Error("No Yahoo Finance symbol is configured for this instrument");
   const url = endpoint(proxyUrl, "/yahoo/chart");
@@ -53,7 +69,7 @@ export async function fetchYahooRecord(
   url.searchParams.set("symbol", instrument.yahooSymbol);
   url.searchParams.set("range", query.range);
   url.searchParams.set("interval", query.interval);
-  return parseYahooChart(instrument, await fetchJson(url));
+  return parseYahooChart(instrument, await fetchJson(url, { signal }));
 }
 
 export interface SearchResult {

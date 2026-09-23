@@ -1,7 +1,18 @@
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+const numberFormatters = new Map<number, Intl.NumberFormat>();
+const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" });
+
 export function formatMoney(value: number | null, currency = "EUR"): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
   try {
-    return new Intl.NumberFormat("en-GB", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    let formatter = moneyFormatters.get(currency);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat("en-GB", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (moneyFormatters.size >= 16) moneyFormatters.clear();
+      moneyFormatters.set(currency, formatter);
+    }
+    return formatter.format(value);
   } catch {
     return `${currency} ${value.toFixed(2)}`;
   }
@@ -14,7 +25,13 @@ export function formatSignedMoney(value: number | null, currency = "EUR"): strin
 
 export function formatNumber(value: number, maximumFractionDigits = 4): string {
   if (!Number.isFinite(value)) return "Unavailable";
-  return new Intl.NumberFormat("en-GB", { maximumFractionDigits }).format(value);
+  const digits = Number.isFinite(maximumFractionDigits) ? Math.max(0, Math.min(20, Math.trunc(maximumFractionDigits))) : 4;
+  let formatter = numberFormatters.get(digits);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-GB", { maximumFractionDigits: digits });
+    numberFormatters.set(digits, formatter);
+  }
+  return formatter.format(value);
 }
 
 export function formatPercent(value: number | null): string {
@@ -30,13 +47,13 @@ export function formatPercentInBrackets(value: number | null): string {
 export function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown time";
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return dateTimeFormatter.format(date);
 }
 
 export function formatDate(value: string): string {
   const date = new Date(value.includes("T") ? value : `${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return "Unknown date";
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(date);
+  return dateFormatter.format(date);
 }
 
 export function toLocalIsoDate(date = new Date()): string {

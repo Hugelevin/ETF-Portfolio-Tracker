@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const FOCUSABLE = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])";
+const FOCUSABLE = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], summary, [tabindex]:not([tabindex='-1'])";
 
 export function useDialogKeyboard(onClose: () => void, initialSelector?: string) {
   const dialogRef = useRef<HTMLElement>(null);

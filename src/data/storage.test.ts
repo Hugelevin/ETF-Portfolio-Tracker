@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createPortfolioStorage,
   exportPortfolioJson,
@@ -99,5 +99,81 @@ describe("portfolio storage", () => {
     expect(json).not.toContain("apiKey");
     expect(importPortfolioJson(json)).toEqual(portfolio);
     expect(() => importPortfolioJson('{"schemaVersion":2}')).toThrow();
+  });
+
+  it.each(["null", "[]", "42", '{"broken":null}', '{"broken":{"history":[null]}}'])("ignores malformed market cache %s", (value) => {
+    const memory = new MemoryStorage();
+    memory.setItem("etf-tracker.market-cache.v1", value);
+    expect(createPortfolioStorage(memory).loadMarketCache()).toEqual({});
+  });
+
+  it("preserves unreadable orders and makes the raw file recoverable", () => {
+    const memory = new MemoryStorage();
+    memory.setItem("etf-tracker.portfolio.v1", "damaged original");
+    const storage = createPortfolioStorage(memory);
+    storage.loadPortfolio();
+    expect(storage.getLoadWarning()).toMatch(/could not be read/);
+    expect(storage.getRecoveryJson()).toBe("damaged original");
+    storage.savePortfolio(portfolio);
+    expect(memory.getItem("etf-tracker.portfolio.v1.recovery")).toBe("damaged original");
+    expect(storage.getRecoveryJson()).toBe("damaged original");
+    const reopened = createPortfolioStorage(memory);
+    expect(reopened.loadPortfolio()).toEqual(portfolio);
+    expect(reopened.getRecoveryJson()).toBe("damaged original");
+    expect(reopened.getLoadWarning()).toMatch(/recovery/i);
+  });
+
+  it("keeps cache quota failures separate from portfolio writes", () => {
+    const memory = new MemoryStorage();
+    const storage = createPortfolioStorage(memory);
+    vi.spyOn(memory, "setItem").mockImplementation(() => { throw new DOMException("Full", "QuotaExceededError"); });
+    expect(storage.saveMarketCache({})).toBe(false);
+    expect(() => storage.savePortfolio(portfolio)).toThrow();
+  });
+
+  it("tolerates storage blocked by the browser", () => {
+    const memory = new MemoryStorage();
+    vi.spyOn(memory, "getItem").mockImplementation(() => { throw new DOMException("Denied", "SecurityError"); });
+    vi.spyOn(memory, "removeItem").mockImplementation(() => { throw new DOMException("Denied", "SecurityError"); });
+    const storage = createPortfolioStorage(memory);
+    expect(storage.loadPortfolio()).toEqual(portfolio);
+    expect(storage.loadSettings()).toEqual({ proxyUrl: "" });
+    expect(storage.getLoadWarning()).toMatch(/unavailable/);
+  });
+
+  it("handles a browser that blocks even obtaining localStorage", () => {
+    const getStorage = vi.fn(() => { throw new DOMException("Denied", "SecurityError"); });
+    const storage = createPortfolioStorage(getStorage);
+    expect(storage.loadPortfolio()).toEqual(portfolio);
+    expect(getStorage).toHaveBeenCalled();
+    expect(storage.getLoadWarning()).toMatch(/unavailable/);
+    expect(() => storage.savePortfolio(portfolio)).toThrow();
+  });
+
+  it("evicts only disposable quotes before retrying a portfolio quota failure", () => {
+    const memory = new MemoryStorage();
+    memory.setItem("etf-tracker.market-cache.v1", "large cache");
+    memory.setItem("unrelated-app", "keep");
+    const originalSet = memory.setItem.bind(memory);
+    vi.spyOn(memory, "setItem").mockImplementation((key, value) => {
+      if (key === "etf-tracker.portfolio.v1" && memory.getItem("etf-tracker.market-cache.v1")) throw new DOMException("Full", "QuotaExceededError");
+      originalSet(key, value);
+    });
+    const storage = createPortfolioStorage(memory);
+    expect(storage.savePortfolio(portfolio)).toEqual(portfolio);
+    expect(memory.getItem("etf-tracker.market-cache.v1")).toBeNull();
+    expect(memory.getItem("unrelated-app")).toBe("keep");
+  });
+
+  it("clears in-memory recovery state after the user explicitly clears the portfolio", () => {
+    const memory = new MemoryStorage();
+    memory.setItem("etf-tracker.portfolio.v1", "damaged original");
+    const storage = createPortfolioStorage(memory);
+    storage.loadPortfolio();
+    storage.clearPortfolio();
+    expect(storage.getRecoveryJson()).toBeNull();
+    expect(storage.getLoadWarning()).toBe("");
+    storage.savePortfolio(portfolio);
+    expect(memory.getItem("etf-tracker.portfolio.v1.recovery")).toBeNull();
   });
 });

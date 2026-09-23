@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Instrument, MarketRecord } from "../types";
-import { resolveMarketData } from "./service";
+import { instrumentIdentity, isValidMarketRecord, resolveMarketData } from "./service";
 
 const instrument: Instrument = {
   id: "jedi-xetra-eur",
@@ -14,6 +14,7 @@ const instrument: Instrument = {
 };
 
 const record = (source: MarketRecord["quote"]["source"]): MarketRecord => ({
+  identity: instrumentIdentity(instrument),
   quote: {
     instrumentId: instrument.id,
     price: 80,
@@ -30,6 +31,15 @@ const record = (source: MarketRecord["quote"]["source"]): MarketRecord => ({
 });
 
 describe("resolveMarketData", () => {
+  it("rejects legacy cache entries without an exact listing identity", () => {
+    expect(isValidMarketRecord({ ...record("cache"), identity: undefined }, instrument)).toBe(false);
+    expect(isValidMarketRecord({ ...record("cache"), identity: undefined }, { ...instrument, assetType: "FUND" })).toBe(false);
+  });
+  it("rejects a reused instrument id with a different ISIN, venue or provider symbol", () => {
+    for (const changed of [{ isin: "IE00BK5BQT80" }, { exchange: "Milan" }, { yahooSymbol: "OTHER.DE" }]) {
+      expect(isValidMarketRecord(record("cache"), { ...instrument, ...changed })).toBe(false);
+    }
+  });
   it("prefers a successful Yahoo response", async () => {
     const yahoo = vi.fn().mockResolvedValue(record("yahoo"));
     const result = await resolveMarketData({ instrument, yahoo, cached: record("cache") });

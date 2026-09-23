@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { VERIFIED_INSTRUMENTS } from "../config/instruments";
 import { toLocalIsoDate } from "../format";
+import { purchaseLotSchema } from "../domain/schema";
 import type { Instrument, PurchaseLot } from "../types";
 import { InstrumentLogo } from "./InstrumentLogo";
 import { useDialogKeyboard } from "./useDialogKeyboard";
 
-export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSave: (instrument: Instrument, lot: PurchaseLot) => void }) {
+export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSave: (instrument: Instrument, lot: PurchaseLot) => boolean | void }) {
   const [instrumentId, setInstrumentId] = useState("");
   const [error, setError] = useState("");
   const changeButtonRef = useRef<HTMLButtonElement>(null);
@@ -31,7 +32,9 @@ export function PurchaseDialog({ onClose, onSave }: { onClose: () => void; onSav
         : "Enter positive shares and price, a valid date, and fees of zero or more.");
       return;
     }
-    onSave(instrument, { id: globalThis.crypto?.randomUUID?.() ?? `lot-${Date.now()}`, instrumentId: instrument.id, shares, pricePerShare, purchaseDate, fees });
+    const parsed = purchaseLotSchema.safeParse({ id: globalThis.crypto?.randomUUID?.() ?? `lot-${Date.now()}`, instrumentId: instrument.id, shares, pricePerShare, purchaseDate, fees });
+    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check order details."); return; }
+    if (onSave(instrument, parsed.data) === false) setError("Order could not be saved. Free browser storage and try again.");
   }
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>

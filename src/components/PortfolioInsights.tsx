@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BarChart3, ChevronDown, LineChart, RefreshCw } from "lucide-react";
 import { buildPortfolioValueHistory, buildTimeWeightedReturnSeries, calculateMoneyWeightedReturn, calculatePortfolioRiskStatistics } from "../domain/portfolio";
 import { formatMoney, formatPercent, formatPercentInBrackets } from "../format";
@@ -13,21 +13,29 @@ interface Props {
   baseCurrency: string;
   loading: boolean;
   getRecord: (instrumentId: string, range: ChartRange) => MarketRecord | null;
+  getError?: (instrumentId: string, range: ChartRange) => string | undefined;
   onRange: (range: ChartRange) => void;
 }
 
-export function PortfolioInsights({ positions, baseCurrency, loading, getRecord, onRange }: Props) {
+export function PortfolioInsights(props: Props) {
   const [open, setOpen] = useState(false);
+  return <details className="portfolio-insights" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary><span><BarChart3 aria-hidden="true" /><span><strong>Portfolio Insights</strong><small>Allocation, history and risk</small></span></span><ChevronDown className="insights-chevron" aria-hidden="true" /></summary>
+    {open && <InsightsContent {...props} />}
+  </details>;
+}
+
+function InsightsContent({ positions, baseCurrency, loading, getRecord, getError, onRange }: Props) {
   const [range, setRange] = useState<ChartRange>("1W");
   const [historyMode, setHistoryMode] = useState<PortfolioHistoryMode>("value");
-  const [requestedRiskKey, setRequestedRiskKey] = useState("");
+  const requestedRiskKey = useRef("");
   const basePositions = useMemo(() => positions.filter((position) => position.instrument.currency === baseCurrency), [positions, baseCurrency]);
   const allocation = useMemo(() => basePositions
     .filter((position) => position.currentValue !== null)
     .sort((left, right) => (right.currentValue ?? 0) - (left.currentValue ?? 0)), [basePositions]);
   const total = allocation.reduce((sum, position) => sum + (position.currentValue ?? 0), 0);
   const moneyWeightedReturn = useMemo(() => calculateMoneyWeightedReturn(basePositions), [basePositions]);
-  const histories = Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, range)?.history ?? []]));
+  const histories = useMemo(() => Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, range)?.history ?? []])), [basePositions, getRecord, range]);
   const complete = basePositions.length > 0 && basePositions.every((position) => histories[position.instrument.id]?.length);
   const history = useMemo(() => complete ? buildPortfolioValueHistory(basePositions, histories, baseCurrency) : [], [complete, basePositions, histories, baseCurrency]);
   const returnHistory = useMemo(() => buildTimeWeightedReturnSeries(history), [history]);
@@ -38,11 +46,20 @@ export function PortfolioInsights({ positions, baseCurrency, loading, getRecord,
   const changePercent = change !== null && first && first.marketValue > 0 ? change / first.marketValue * 100 : null;
   const latestReturn = returnHistory.at(-1)?.returnPercentage ?? null;
   const riskKey = basePositions.map((position) => position.instrument.id).sort().join("|");
-  const riskHistories = Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, "MAX")?.history ?? []]));
+  const riskHistories = useMemo(() => Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, "MAX")?.history ?? []])), [basePositions, getRecord]);
   const riskLoaded = basePositions.length > 0 && basePositions.every((position) => riskHistories[position.instrument.id]?.length);
   const riskHistory = useMemo(() => riskLoaded ? buildPortfolioValueHistory(basePositions, riskHistories, baseCurrency) : [], [riskLoaded, basePositions, riskHistories, baseCurrency]);
   const riskSufficient = riskHistory.length >= 2;
   const risk = useMemo(() => calculatePortfolioRiskStatistics(riskHistory), [riskHistory]);
+  const rangeFailures = basePositions.filter((position) => getError?.(position.instrument.id, range)).map((position) => position.instrument.ticker);
+  const riskFailures = basePositions.filter((position) => getError?.(position.instrument.id, "MAX")).map((position) => position.instrument.ticker);
+
+  useEffect(() => {
+    if (riskKey && !riskLoaded && requestedRiskKey.current !== riskKey) {
+      requestedRiskKey.current = riskKey;
+      onRange("MAX");
+    }
+  }, [riskKey, riskLoaded, onRange]);
 
   function selectRange(next: ChartRange) {
     setRange(next);
@@ -51,13 +68,11 @@ export function PortfolioInsights({ positions, baseCurrency, loading, getRecord,
 
   function requestRiskHistory() {
     if (!riskKey) return;
-    setRequestedRiskKey(riskKey);
+    requestedRiskKey.current = riskKey;
     onRange("MAX");
   }
 
-  return <details className="portfolio-insights" open={open} onToggle={(event) => { const nextOpen = event.currentTarget.open; setOpen(nextOpen); if (nextOpen && !riskLoaded && requestedRiskKey !== riskKey) requestRiskHistory(); }}>
-    <summary><span><BarChart3 aria-hidden="true" /><span><strong>Portfolio Insights</strong><small>Allocation, history and risk</small></span></span><ChevronDown className="insights-chevron" aria-hidden="true" /></summary>
-    {open && <div className="insights-body">
+  return <div className="insights-body">
       <section className="allocation-panel" aria-labelledby="allocation-title">
         <div className="insight-heading"><div><p className="eyebrow">Allocation</p><h3 id="allocation-title">Current Value by Holding</h3></div><strong>{formatMoney(total, baseCurrency)}</strong></div>
         <div className="annualised-return"><span>Annualised Return</span><strong className={moneyWeightedReturn !== null ? (moneyWeightedReturn.percentage < 0 ? "negative-text" : "positive-text") : undefined}>{moneyWeightedReturn !== null ? formatPercent(moneyWeightedReturn.percentage) : "Not Enough History"}</strong><small>Cash-flow weighted · Before fees</small></div>
@@ -75,6 +90,8 @@ export function PortfolioInsights({ positions, baseCurrency, loading, getRecord,
         <div className="portfolio-history-heading"><LineChart aria-hidden="true" /><strong id="portfolio-history-title">Portfolio History</strong></div>
         <div className="portfolio-history-body">
           <div className="portfolio-history-controls"><div className="view-controls portfolio-view-controls" role="group" aria-label="Portfolio history view"><button type="button" className={historyMode === "value" ? "active" : ""} aria-pressed={historyMode === "value"} onClick={() => setHistoryMode("value")}>Value</button><button type="button" className={historyMode === "return" ? "active" : ""} aria-pressed={historyMode === "return"} onClick={() => setHistoryMode("return")}>Return</button></div><div className="range-controls" aria-label="Portfolio history range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={(event) => { event.preventDefault(); selectRange(item); }}>{item}</button>)}</div></div>
+          {historyMode === "return" && <p className="risk-coverage">Estimated return · Cash flows treated as period-end · Before fees</p>}
+          {rangeFailures.length > 0 && <p className="risk-coverage" role="status">History refresh failed: {rangeFailures.join(", ")}. Saved history is shown where available.</p>}
           {!complete ? <div className="insight-empty">Complete historical prices are not available for every holding in this range.</div> : !history.length ? <div className="insight-empty">Portfolio history begins after your first order.</div> : <>
             <p className="portfolio-history-summary">{historyMode === "value" ? <>Latest {formatMoney(latest?.marketValue ?? null)}<span className="summary-separator" aria-hidden="true">|</span>Change {formatMoney(change)} {formatPercentInBrackets(changePercent)}</> : <>Market Return {formatPercent(latestReturn)}<span className="summary-separator" aria-hidden="true">|</span>{formatMoney((latest?.marketValue ?? 0) - (latest?.investedValue ?? 0))} Before Fees</>}</p>
             <Suspense fallback={<div className="chart-empty chart-skeleton" role="status">Loading Portfolio Chart…</div>}><PortfolioHistoryChart points={history} mode={historyMode} /></Suspense>
@@ -85,7 +102,9 @@ export function PortfolioInsights({ positions, baseCurrency, loading, getRecord,
       <section className="risk-panel" role="region" aria-labelledby="risk-title">
         <div className="risk-heading"><span><Activity aria-hidden="true" /><span><strong id="risk-title">Risk Statistics</strong><small>Contribution-adjusted, using maximum available history</small></span></span>{!riskLoaded && <button type="button" className="button secondary" onClick={requestRiskHistory} disabled={loading}><RefreshCw className={loading ? "spin" : ""} aria-hidden="true" /> {loading ? "Loading History" : "Retry History"}</button>}</div>
         {!riskLoaded && <p className="risk-coverage" role="status">Complete historical prices are required for every EUR holding. Statistics remain unavailable until full history loads.</p>}
+        {riskFailures.length > 0 && <p className="risk-coverage" role="status">Risk history refresh failed: {riskFailures.join(", ")}. Saved history is used where available.</p>}
         {riskLoaded && !riskSufficient && <p className="risk-coverage" role="status">More historical observations are required before risk statistics can be calculated.</p>}
+        {riskLoaded && riskSufficient && <p className="risk-coverage">Estimates from available prices · Cash flows treated as period-end · Before fees</p>}
         <dl className="risk-grid">
           <RiskStat label="Maximum Drawdown" value={formatDrawdown(risk.maximumDrawdownPercentage)} detail="Largest peak-to-trough fall" tone="negative" />
           <RiskStat label="Current Drawdown" value={formatDrawdown(risk.currentDrawdownPercentage)} detail="Distance below previous peak" tone={risk.currentDrawdownPercentage !== null && risk.currentDrawdownPercentage < 0 ? "negative" : "neutral"} />
@@ -95,8 +114,7 @@ export function PortfolioInsights({ positions, baseCurrency, loading, getRecord,
           <RiskStat label="Recovery Time" value={risk.averageRecoveryDays === null ? "Unavailable" : `${Math.round(risk.averageRecoveryDays)} days average`} detail={risk.averageRecoveryDays === null ? "No completed drawdown yet" : `${risk.recoveredDrawdowns} recovered drawdowns · Longest ${Math.round(risk.longestRecoveryDays ?? 0)} days`} />
         </dl>
       </section>
-    </div>}
-  </details>;
+    </div>;
 }
 
 function RiskStat({ label, value, detail, tone = "neutral" }: { label: string; value: string; detail: string; tone?: "negative" | "neutral" }) {

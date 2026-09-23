@@ -1,7 +1,16 @@
 import { readFile } from "node:fs/promises";
 
 const [file = "outputs/private-portfolio-import-template.json", proxy = ""] = process.argv.slice(2);
-const portfolio = JSON.parse(await readFile(file, "utf8"));
+async function loadPortfolio() {
+  if (file !== "--catalog") return JSON.parse(await readFile(file, "utf8"));
+  // The checked-in catalogue contains identities only, never personal orders.
+  const ts = await import("typescript");
+  const source = await readFile(new URL("../src/config/instruments.ts", import.meta.url), "utf8");
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+  const { VERIFIED_INSTRUMENTS } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+  return { instruments: VERIFIED_INSTRUMENTS };
+}
+const portfolio = await loadPortfolio();
 if (!Array.isArray(portfolio.instruments)) throw new Error("Template has no instruments array");
 
 const results = [];
@@ -16,7 +25,7 @@ for (const instrument of portfolio.instruments) {
     ? `${proxy.replace(/\/$/, "")}/yahoo/chart?symbol=${encodeURIComponent(instrument.yahooSymbol)}&range=5d&interval=${interval}`
     : `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(instrument.yahooSymbol)}?range=5d&interval=${interval}&events=history`;
   try {
-    const response = await fetch(base, { headers: { Accept: "application/json", "User-Agent": "EUR-Portfolio-Tracker-Verification/1.0" } });
+    const response = await fetch(base, { signal: AbortSignal.timeout(15_000), headers: { Accept: "application/json", "User-Agent": "EUR-Portfolio-Tracker-Verification/1.0" } });
     const payload = await response.json();
     const chart = payload?.chart?.result?.[0];
     const meta = chart?.meta;

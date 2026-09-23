@@ -93,6 +93,7 @@ td > strong, td > small { display: block; }
 .holding-card .instrument-logo { width: 52px; height: 52px; border-radius: 13px; }
 .holding-card .status-stack { align-self: start; }
 .holding-card .status { margin-top: .15rem; }
+.holding-error { margin: .5rem 0 0; color: var(--amber); font-size: .75rem; line-height: 1.4; overflow-wrap: anywhere; }
 .holding-menu, .order-menu { position: relative; }
 .holding-menu summary, .order-menu summary { width: 44px; height: 44px; display: grid; place-items: center; list-style: none; border-radius: 10px; color: var(--ink); cursor: pointer; }
 .holding-menu summary::-webkit-details-marker, .order-menu summary::-webkit-details-marker { display: none; }
@@ -105,11 +106,11 @@ td > strong, td > small { display: block; }
 .holding-overview { width: 100%; min-height: 116px; padding: .55rem 0 .45rem; display: grid; grid-template-columns: minmax(0,1fr) clamp(132px, 40vw, 168px); align-items: center; gap: .65rem; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .holding-performance { min-width: 0; display: grid; justify-items: start; gap: .38rem; }
 .holding-value { font-size: clamp(1.3rem, 6.1vw, 1.55rem); line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.return-chip { display: inline-flex; align-items: center; gap: .32rem; padding: .3rem .48rem; border-radius: 8px; font-size: .78rem; font-weight: 800; }
+.return-chip { display: inline-flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: .32rem; padding: .3rem .48rem; border-radius: 8px; font-size: .78rem; font-weight: 800; }
 .return-chip.positive { background: #e4f4ec; }
 .return-chip.negative { background: var(--red-soft); }
 .return-chip.neutral { color: var(--muted); background: #eef2f0; }
-.holding-today { display: inline-flex; align-items: center; gap: .32rem; font-size: .75rem; font-weight: 700; }
+.holding-today { display: inline-flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: .32rem; font-size: .75rem; font-weight: 700; }
 .change-separator, .summary-separator { padding-inline: .08rem; color: currentColor; opacity: .55; }
 .holding-sparkline { min-width: 0; height: 96px; padding-left: .25rem; display: grid; grid-template-rows: auto 1fr; gap: .15rem; border-left: 1px solid var(--line); color: var(--muted); }
 .holding-sparkline > span { justify-self: end; font-size: .7rem; font-weight: 800; letter-spacing: .08em; }

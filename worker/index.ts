@@ -70,6 +70,7 @@ async function yahooChart(request: Request, env: Env, ctx: ExecutionContext, url
 
   const upstreamResponse = await fetch(upstream, {
     headers: { "Accept": "application/json", "User-Agent": "EUR-Portfolio-Tracker/1.0" },
+    signal: AbortSignal.timeout(12_000),
   });
   const headers = corsHeaders(request, env);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -87,7 +88,7 @@ async function yahooSearch(request: Request, env: Env, url: URL) {
   upstream.searchParams.set("q", query);
   upstream.searchParams.set("quotesCount", "10");
   upstream.searchParams.set("newsCount", "0");
-  const response = await fetch(upstream, { headers: { "Accept": "application/json", "User-Agent": "EUR-Portfolio-Tracker/1.0" } });
+  const response = await fetch(upstream, { headers: { "Accept": "application/json", "User-Agent": "EUR-Portfolio-Tracker/1.0" }, signal: AbortSignal.timeout(12_000) });
   const headers = corsHeaders(request, env);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", "public, max-age=300");
@@ -106,8 +107,8 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/health") return json(request, env, { ok: true });
-      if (url.pathname === "/yahoo/chart") return yahooChart(request, env, ctx, url);
-      if (url.pathname === "/yahoo/search") return yahooSearch(request, env, url);
+      if (url.pathname === "/yahoo/chart") return await yahooChart(request, env, ctx, url);
+      if (url.pathname === "/yahoo/search") return await yahooSearch(request, env, url);
       return json(request, env, { error: "Not found" }, 404);
     } catch {
       return json(request, env, { error: "Market-data upstream request failed" }, 502);

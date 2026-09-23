@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "./index";
 
 const env: Env = {
@@ -23,6 +23,7 @@ const context: ExecutionContext = {
 };
 
 describe("market-data Worker", () => {
+  afterEach(() => vi.unstubAllGlobals());
   it("reports health with CORS for the configured Pages origin", async () => {
     const response = await worker.fetch(new Request("https://worker.test/health", {
       headers: { Origin: "https://hugelevin.github.io" },
@@ -40,5 +41,16 @@ describe("market-data Worker", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Unsupported symbol, range, or interval" });
+  });
+
+  it("returns a CORS-readable JSON error when an asynchronous upstream request fails", async () => {
+    vi.stubGlobal("caches", { default: { match: vi.fn().mockResolvedValue(undefined) } });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection failed")));
+    const response = await worker.fetch(new Request("https://worker.test/yahoo/chart?symbol=JEDI.DE&range=5d&interval=5m", {
+      headers: { Origin: "https://hugelevin.github.io" },
+    }), env, context);
+    expect(response.status).toBe(502);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://hugelevin.github.io");
+    await expect(response.json()).resolves.toEqual({ error: "Market-data upstream request failed" });
   });
 });

@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
           ? [Date.parse("2026-06-13T09:00:00Z"), Date.parse("2026-07-13T09:00:00Z")].map((value) => value / 1_000)
         : [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
     const closes = range === "max" ? [100, 80, 100, 120, 90, 108, 132] : range === "1y" ? [60, 70, 79] : range === "3mo" ? [70, 75, 80] : range === "1mo" ? [75, 80] : [78, 80];
-    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79 }, timestamp: timestamps, indicators: { quote: [{ close: closes }] } }] } } });
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 79, previousClose: 79, range }, timestamp: timestamps, indicators: { quote: [{ close: closes }] } }] } } });
   });
   await page.addInitScript((portfolio) => {
     localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify(portfolio));
@@ -155,11 +155,17 @@ test("loads the installed application shell while offline", async ({ page, conte
     }
     return false;
   });
+  await page.waitForFunction(() => Boolean(JSON.parse(localStorage.getItem("etf-tracker.market-cache.v1") ?? "{}")["jedi-xetra-eur:1W"]?.history.length));
+  await page.unroute("http://market.test/yahoo/chart**");
   await context.setOffline(true);
   try {
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Portfolio Dashboard" })).toBeVisible();
     await expect(page.getByText("You are offline.", { exact: false })).toBeVisible();
+    // First-ever detail/chart visit must work too, not only the eager shell.
+    await page.getByRole("button", { name: "Open JEDI details" }).click();
+    await expect(page.getByRole("heading", { name: "Market Price History" })).toBeVisible();
+    await expect(page.getByText("View Chart Data as a Table")).toBeVisible();
   } finally {
     await context.setOffline(false);
   }
@@ -183,6 +189,8 @@ test("keeps the primary mobile controls touch friendly and compact", async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
+  // Trigger the notification explicitly; background refreshes need not show one.
+  await page.getByRole("button", { name: "Refresh Prices" }).click();
   const toastClose = await page.getByRole("button", { name: "Dismiss notification" }).boundingBox();
   expect(toastClose).not.toBeNull();
   expect(toastClose!.width).toBeGreaterThanOrEqual(44);
@@ -247,7 +255,7 @@ test("uses a loss theme when the portfolio daily return is negative", async ({ p
   await page.unroute("http://market.test/yahoo/chart**");
   await page.route("http://market.test/yahoo/chart**", async (route) => {
     const timestamps = [Date.parse("2026-07-13T10:00:00Z"), Date.parse("2026-07-13T10:10:00Z")].map((value) => value / 1_000);
-    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", chartPreviousClose: 80 }, timestamp: timestamps, indicators: { quote: [{ close: [79, 78] }] } }] } } });
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { error: null, result: [{ meta: { symbol: "JEDI.DE", currency: "EUR", fullExchangeName: "XETRA", instrumentType: "ETF", previousClose: 80, chartPreviousClose: 80 }, timestamp: timestamps, indicators: { quote: [{ close: [79, 78] }] } }] } } });
   });
   await page.goto("/");
   await expect(page.locator(".summary")).toHaveClass(/loss/);
@@ -346,6 +354,13 @@ test("opens portfolio history and shows compact chart summaries", async ({ page 
   await expect(page.locator(".portfolio-history")).toHaveJSProperty("tagName", "SECTION");
   await expect(page.locator(".portfolio-history > summary")).toHaveCount(0);
   await expect(page.locator(".portfolio-history-summary")).toContainText(/Change .* \([+-]\d/);
+  const dataToggle = page.locator(".portfolio-history .data-alternative > summary");
+  await expect(dataToggle).toBeVisible();
+  await page.locator(".portfolio-history .range-controls button").last().focus();
+  await page.keyboard.press("Tab");
+  await expect(dataToggle).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("table", { name: "Portfolio history data" })).toBeVisible();
 });
 
 test("aligns mobile recovery button icons and labels", async ({ page }) => {
@@ -613,7 +628,7 @@ test("shows an explicit rate-limit error without inventing a price", async ({ pa
   await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 429, headers: { "access-control-allow-origin": "*" }, json: { error: "daily request allowance reached" } }));
   await page.goto("/");
   await expect(page.locator(".status.unavailable:visible").first()).toBeVisible();
-  await expect(page.locator(".fallback-reason:visible").first()).toContainText("Rate limit reached");
+  await expect(page.locator(".fallback-reason:visible, .holding-error:visible").first()).toContainText("Rate limit reached");
   await expect(page.getByLabel("0 of 1 EUR positions valued")).toBeVisible();
 });
 
@@ -627,6 +642,21 @@ test("keeps the holdings list free of unnecessary filters", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Gainers" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Losers" })).toHaveCount(0);
   await expect(page.locator(".holding-card:visible")).toHaveCount(1);
+});
+
+test("keeps mobile holding names readable when provider errors are long", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.unroute("http://market.test/yahoo/chart**");
+  await page.route("http://market.test/yahoo/chart**", (route) => route.fulfill({ status: 503, headers: { "access-control-allow-origin": "*" }, json: { error: "Market provider temporarily unavailable. Try Refresh Prices again shortly." } }));
+  await page.goto("/");
+  const card = page.locator(".holding-card");
+  await expect(card.locator(".holding-error")).toBeVisible();
+  const name = await card.locator(".card-instrument > span:last-child").boundingBox();
+  const header = await card.locator("header").boundingBox();
+  const error = await card.locator(".holding-error").boundingBox();
+  expect(name!.width).toBeGreaterThanOrEqual(130);
+  expect(error!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
+  expect(await card.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
 });
 
 test("browser back closes detail and purchase sheets before leaving dashboard", async ({ page }) => {

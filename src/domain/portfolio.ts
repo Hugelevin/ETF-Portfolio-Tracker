@@ -7,12 +7,14 @@ import type {
   PositionMetrics,
   PurchaseLot,
 } from "../types";
+import { subtractUtcMonths } from "./dates";
 
 export function calculatePosition(
   instrument: Instrument,
   lots: PurchaseLot[],
   quote: MarketQuote | null,
 ): PositionMetrics {
+  if (quote && (quote.instrumentId !== instrument.id || quote.currency !== instrument.currency || !Number.isFinite(quote.price) || quote.price <= 0)) quote = null;
   const totalShares = lots.reduce((sum, lot) => sum + lot.shares, 0);
   const purchaseCostExcludingFees = lots.reduce(
     (sum, lot) => sum + lot.shares * lot.pricePerShare,
@@ -180,23 +182,22 @@ export function calculatePeriodPerformance(
   history: MarketPoint[],
   period: "1W" | "1M",
 ): PeriodPerformance | null {
-  const sorted = [...history].sort(
+  const sorted = [...history].filter((point) => Number.isFinite(point.close) && point.close > 0 && Number.isFinite(Date.parse(point.timestamp))).sort(
     (left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp),
   );
   const latest = sorted.at(-1);
   if (!latest) return null;
 
-  const target = new Date(latest.timestamp);
+  const target = period === "1M" ? subtractUtcMonths(new Date(latest.timestamp), 1) : new Date(latest.timestamp);
   if (period === "1W") {
     target.setUTCDate(target.getUTCDate() - 7);
-  } else {
-    target.setUTCMonth(target.getUTCMonth() - 1);
   }
 
   const reference = sorted
     .filter((point) => Date.parse(point.timestamp) <= target.getTime())
     .at(-1);
-  if (!reference || reference.close <= 0) return null;
+  // Sparse history must not turn a year-old observation into a weekly return.
+  if (!reference || reference.close <= 0 || target.getTime() - Date.parse(reference.timestamp) > 7 * DAY_MS) return null;
 
   const value = latest.close - reference.close;
   return {
@@ -307,14 +308,17 @@ export function buildPositionValueHistory(
   lots: PurchaseLot[],
   history: MarketPoint[],
 ): PositionValuePoint[] {
-  return history.flatMap((point) => {
+  const orderedLots = [...lots].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate));
+  let lotIndex = 0;
+  let shares = 0;
+  let investedValue = 0;
+  return [...history].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).flatMap((point) => {
     const pointDate = point.timestamp.slice(0, 10);
-    const ownedLots = lots.filter((lot) => lot.purchaseDate <= pointDate);
-    const shares = ownedLots.reduce((sum, lot) => sum + lot.shares, 0);
-    const investedValue = ownedLots.reduce(
-      (sum, lot) => sum + lot.shares * lot.pricePerShare,
-      0,
-    );
+    while (lotIndex < orderedLots.length && orderedLots[lotIndex]!.purchaseDate <= pointDate) {
+      const lot = orderedLots[lotIndex++]!;
+      shares += lot.shares;
+      investedValue += lot.shares * lot.pricePerShare;
+    }
 
     if (shares <= 0) return [];
     return [{
@@ -336,27 +340,37 @@ export function buildPortfolioValueHistory(
   baseCurrency = "EUR",
 ): PortfolioValuePoint[] {
   const basePositions = positions.filter((position) => position.instrument.currency === baseCurrency);
-  const dates = [...new Set(Object.values(histories)
-    .flat()
-    .map((point) => point.timestamp.slice(0, 10)))]
-    .sort();
+  // Sorted cursors visit each price and order once instead of rescanning entire
+  // histories for every date. MAX histories otherwise block mobile rendering.
+  const cursors = basePositions.map((position) => ({
+    lots: [...position.lots].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate)),
+    points: [...(histories[position.instrument.id] ?? [])]
+      .filter((point) => Number.isFinite(point.close) && point.close > 0 && Number.isFinite(Date.parse(point.timestamp)))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+    lotIndex: 0, priceIndex: 0, shares: 0, invested: 0,
+    price: null as MarketPoint | null,
+  }));
+  const dates = [...new Set(cursors.flatMap((cursor) => cursor.points.map((point) => point.timestamp.slice(0, 10))))].sort();
 
   return dates.flatMap((date): PortfolioValuePoint[] => {
     let investedValue = 0;
     let marketValue = 0;
     let pricedPositions = 0;
 
-    for (const position of basePositions) {
-      const ownedLots = position.lots.filter((lot) => lot.purchaseDate <= date);
-      if (!ownedLots.length) continue;
-      const shares = ownedLots.reduce((sum, lot) => sum + lot.shares, 0);
-      const invested = ownedLots.reduce((sum, lot) => sum + lot.shares * lot.pricePerShare, 0);
-      const price = (histories[position.instrument.id] ?? [])
-        .filter((point) => point.timestamp.slice(0, 10) <= date)
-        .at(-1)?.close;
-      if (!Number.isFinite(price) || price == null || price <= 0) return [];
-      investedValue += invested;
-      marketValue += shares * price;
+    for (const cursor of cursors) {
+      while (cursor.lotIndex < cursor.lots.length && cursor.lots[cursor.lotIndex]!.purchaseDate <= date) {
+        const lot = cursor.lots[cursor.lotIndex++]!;
+        cursor.shares += lot.shares;
+        cursor.invested += lot.shares * lot.pricePerShare;
+      }
+      while (cursor.priceIndex < cursor.points.length && cursor.points[cursor.priceIndex]!.timestamp.slice(0, 10) <= date) {
+        cursor.price = cursor.points[cursor.priceIndex++]!;
+      }
+      if (cursor.shares <= 0) continue;
+      // Carry closes over weekends/holidays, never indefinitely across gaps.
+      if (!cursor.price || Date.parse(date) - Date.parse(cursor.price.timestamp.slice(0, 10)) > 7 * DAY_MS) return [];
+      investedValue += cursor.invested;
+      marketValue += cursor.shares * cursor.price.close;
       pricedPositions += 1;
     }
 
@@ -371,8 +385,9 @@ export function buildPortfolioValueHistory(
 }
 
 /**
- * Chains sub-period returns after removing net purchases at each point. This
- * keeps contributions from appearing as investment performance in the chart.
+ * Estimates linked returns after removing net purchases at each point, treating
+ * flows as end-of-period. Exact flow-time valuations are not present in order
+ * data; this is not an exact intraday time-weighted return.
  */
 export function buildTimeWeightedReturnSeries(
   points: PortfolioValuePoint[],
@@ -390,7 +405,7 @@ export function buildTimeWeightedReturnSeries(
 }
 
 /**
- * Calculates risk from the contribution-neutral return index. Raw portfolio
+ * Calculates estimated risk from the contribution-adjusted return index. Raw portfolio
  * value is used only for the highest-value statistic, so new orders cannot be
  * mistaken for performance or recovery.
  */
@@ -458,8 +473,19 @@ export function calculatePortfolioRiskStatistics(
   for (const point of growth) monthEnds.set(point.timestamp.slice(0, 7), { growth: point.value, timestamp: point.timestamp });
   const monthlyPoints = [...monthEnds.entries()].sort(([left], [right]) => left.localeCompare(right));
   const monthlyReturns = monthlyPoints.slice(1).flatMap(([month, point], index): MonthlyRiskReturn[] => {
-    const previous = monthlyPoints[index]?.[1];
-    return previous && previous.growth > 0 ? [{ month, percentage: (point.growth / previous.growth - 1) * 100 }] : [];
+    const previousEntry = monthlyPoints[index];
+    if (!previousEntry) return [];
+    const [previousMonth, previous] = previousEntry;
+    const end = new Date(Date.parse(`${month}-01T00:00:00Z`));
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    // Only completed calendar months, with a recent close at each boundary.
+    const latestTime = Date.parse(sorted.at(-1)!.timestamp);
+    const currentMonthFinished = latestTime >= end.getTime() - DAY_MS;
+    const expectedPrevious = subtractUtcMonths(new Date(`${month}-01T00:00:00Z`), 1).toISOString().slice(0, 7);
+    const startTime = Date.parse(`${month}-01T00:00:00Z`);
+    const boundariesCovered = startTime - Date.parse(previous.timestamp) <= 7 * DAY_MS && end.getTime() - Date.parse(point.timestamp) <= 7 * DAY_MS;
+    return previous.growth > 0 && previousMonth === expectedPrevious && currentMonthFinished && boundariesCovered
+      ? [{ month, percentage: (point.growth / previous.growth - 1) * 100 }] : [];
   });
   const bestMonth = monthlyReturns.reduce<MonthlyRiskReturn | null>((best, item) => !best || item.percentage > best.percentage ? item : best, null);
   const worstMonth = monthlyReturns.reduce<MonthlyRiskReturn | null>((worst, item) => !worst || item.percentage < worst.percentage ? item : worst, null);
@@ -477,9 +503,39 @@ export function calculatePortfolioRiskStatistics(
   };
 }
 
-/** Keeps chart shape while limiting SVG/DOM work. First and last points stay. */
-export function downsamplePoints<T>(points: T[], maximum = 90): T[] {
+/** Bounds SVG work. With a value accessor, retains each bucket's extrema so
+ * brief peaks and troughs do not disappear from long-range price charts. */
+export function downsamplePoints<T>(points: T[], maximum = 90, valueOf?: (point: T) => number, stepValueOf?: (point: T) => number): T[] {
   if (points.length <= maximum || maximum < 2) return points;
+  if (stepValueOf) {
+    const required = new Set([0, points.length - 1]);
+    for (let index = 1; index < points.length; index += 1) {
+      if (stepValueOf(points[index]!) !== stepValueOf(points[index - 1]!)) {
+        required.add(index - 1); required.add(index);
+      }
+    }
+    // Transaction boundaries take priority over the visual point budget.
+    const remaining = maximum - required.size;
+    const selected = new Set(remaining > 0 ? downsamplePoints(points, remaining + 2, valueOf) : []);
+    required.forEach((index) => selected.add(points[index]!));
+    return points.filter((point) => selected.has(point));
+  }
+  if (valueOf && maximum >= 4) {
+    const bucketCount = Math.floor((maximum - 2) / 2);
+    const selected = new Set([0, points.length - 1]);
+    for (let bucket = 0; bucket < bucketCount; bucket += 1) {
+      const start = 1 + Math.floor(bucket * (points.length - 2) / bucketCount);
+      const end = 1 + Math.floor((bucket + 1) * (points.length - 2) / bucketCount);
+      let low = start;
+      let high = start;
+      for (let index = start + 1; index < end; index += 1) {
+        if (valueOf(points[index]!) < valueOf(points[low]!)) low = index;
+        if (valueOf(points[index]!) > valueOf(points[high]!)) high = index;
+      }
+      selected.add(low); selected.add(high);
+    }
+    return [...selected].sort((a, b) => a - b).map((index) => points[index]!);
+  }
   const sampled: T[] = [];
   const lastIndex = points.length - 1;
   for (let index = 0; index < maximum; index += 1) {

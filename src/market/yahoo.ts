@@ -1,4 +1,5 @@
 import type { Instrument, MarketPoint, MarketRecord } from "../types";
+import { instrumentIdentity } from "./service";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -66,7 +67,9 @@ function previousTradingClose(history: MarketPoint[]): number | null {
   const latestDate = latest.timestamp.slice(0, 10);
   for (let index = history.length - 2; index >= 0; index -= 1) {
     const point = history[index];
-    if (point && point.timestamp.slice(0, 10) < latestDate) return point.close;
+    if (point && point.timestamp.slice(0, 10) < latestDate) {
+      return Date.parse(latest.timestamp) - Date.parse(point.timestamp) <= 7 * 86_400_000 ? point.close : null;
+    }
   }
   return null;
 }
@@ -114,12 +117,15 @@ export function parseYahooChart(
   const previousClose = timestampedPreviousClose ?? (
     finitePositive(meta.regularMarketPreviousClose)
       ? meta.regularMarketPreviousClose
-      : finitePositive(meta.chartPreviousClose)
+      // chartPreviousClose is the start-of-range baseline, not yesterday's
+      // close. Only a one-day response can safely use that field.
+      : meta.range === "1d" && finitePositive(meta.chartPreviousClose)
         ? meta.chartPreviousClose
         : finitePositive(meta.previousClose) ? meta.previousClose : null
   );
 
   return {
+    identity: instrumentIdentity(instrument),
     quote: {
       instrumentId: instrument.id,
       price: latest.close,

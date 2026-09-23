@@ -36,8 +36,9 @@ export function HoldingsTable({ positions, loading, errors, sparklineHistory, on
       ? <div className="holdings-cards">{positions.map((position) => <article className="holding-card" key={position.instrument.id}>
         <header>
           <button className="card-instrument" onClick={() => onSelect(position)} title={position.instrument.name}><InstrumentLogo instrument={position.instrument} /><span><strong>{position.instrument.ticker}</strong><small>{compactName(position.instrument.name)}</small></span></button>
-          <StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} error={errors[position.instrument.id]} hideUpdated />
+          <StatusBadge quote={position.quote} loading={loading.has(position.instrument.id)} hideUpdated />
         </header>
+        {errors[position.instrument.id] && <p className="holding-error">{errors[position.instrument.id]}</p>}
         <button className="holding-overview" onClick={() => onSelect(position)}>
           <span className="sr-only">Open {position.instrument.ticker} details: </span>
           <span className="holding-performance">

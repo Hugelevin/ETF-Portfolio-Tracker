@@ -120,11 +120,11 @@ The Worker does not receive portfolio holdings. Avoid enabling request-header lo
 - Yahoo's chart endpoint is undocumented and unsupported. It may be delayed, rate-limited, changed or unavailable without notice. ETF responses must match the exact provider symbol, trading currency, exchange venue and instrument type. Fund NAV responses must match the exact provider symbol, trading currency and fund type; the provider venue is shown separately because Moneybase is the descriptive holding venue rather than Yahoo's NAV host venue. The parser uses the latest non-null timestamped chart point.
 - Public Yahoo responses are cached briefly at the Worker and the last successful response is cached locally in the browser.
 - UMMEPSA uses daily Yahoo fund NAV data. Its displayed 7-day annualised NAV yield is calculated automatically from that history and is informational only.
-- Each detail view shows compact source, provider exchange, market timestamp and fetch timestamp text beneath its metrics.
+- Each detail view shows compact source, market timestamp and fetch timestamp text beneath its metrics; listing identity remains in the heading.
 
 Status badges use Yahoo's timestamp and, for ETFs, its `currentTradingPeriod` metadata:
 
-- **Updating**: a Yahoo request is in progress.
+- **Updating**: the current-price refresh is in progress. Historical chart requests have separate loading and error messages.
 - **Updated**: Yahoo returned a valid price within the normal freshness limit. This describes a successful refresh, not real-time exchange data.
 - **Stale**: Yahoo returned a valid price older than the normal freshness limit (24 hours for ETFs; 72 hours for daily fund NAV).
 - **Closed**: Yahoo's regular ETF trading window is currently closed; the latest valid close remains displayed.
@@ -132,6 +132,8 @@ Status badges use Yahoo's timestamp and, for ETFs, its `currentTradingPeriod` me
 - **Unavailable**: no valid current or cached price exists.
 
 Fallback order is: Yahoo request → cached Yahoo → unavailable.
+
+Cached prices must carry the exact ISIN, venue, currency, instrument type and provider-symbol identity. Older cache records without that identity are ignored and refreshed online; orders are not affected. History failures cannot overwrite the current-price refresh error, and current-price success cannot erase a separate history failure.
 
 Historical ranges use 5-minute points for ETF 1D/1W, hourly points for ETF 1M, and daily points for ETF 3M/1Y/MAX. UMMEPSA uses daily NAV points at every range because no intraday NAV exists. The default **Price** chart shows a weighted average purchase-price baseline when it falls inside the visible market range; a distant cost basis never flattens short-term price movement. Its tooltip shows only date and price. The optional **Holding Value** view compares historical holding value with invested cost, excludes broker fees and starts at the first purchase, so it never plots a misleading zero before shares were owned. Its tooltip also shows holding value and change. Charts use a padded data range rather than forcing the Y-axis to zero, so normal market movement remains readable.
 
@@ -184,6 +186,8 @@ To verify through a deployed Worker, add its URL as the second argument:
 pnpm verify:market-data outputs/private-portfolio-import-template.json https://YOUR-WORKER.workers.dev
 ```
 
+To check the current built-in identities without a private import file, use `pnpm verify:market-data --catalog https://YOUR-WORKER.workers.dev`. Each request has a 15-second deadline.
+
 Because Yahoo is an undocumented source, a temporary provider failure should be investigated rather than converted into a placeholder price.
 
 ## Deploy the dashboard to GitHub Pages
@@ -203,9 +207,21 @@ After deployment, open the GitHub Pages URL in Safari or Chrome and choose **Add
 
 After the first successful online visit, the application shell is cached for offline opening. Market prices still require a connection; cached prices remain visibly labelled as cached. A newly deployed version is downloaded in the background and is used on the next visit or refresh.
 
+Each production build fingerprints its offline cache and precaches lazy detail/chart modules as well as the dashboard. Static files are served from that release's cache without repeated downloads. Cache cleanup is restricted to this application's path and retains one previous release for open tabs. Failed network responses do not replace the working offline shell. Browsers may still evict offline storage; offline availability is not a substitute for JSON backups.
+
+### Return and risk methodology
+
+Invested capital is shares multiplied by purchase price; broker fees remain separate. Market return is current value minus that capital. Net return additionally subtracts broker fees. Annualised return uses dated purchase cash flows (XIRR) and is unavailable when holdings do not share a valuation date.
+
+The portfolio Return chart and risk statistics use an **estimated**, geometrically linked return series, with purchases treated as end-of-period cash flows. Exact valuations at each purchase time are unavailable, so these are not exact intraday time-weighted returns. Large orders and sparse history can materially affect the estimates. Drawdowns and recovery refer to this return index; highest portfolio value is the raw valuation. Volatility uses sample standard deviation, annualised from the median observation interval (capped at 252 periods/year). Best/worst month excludes incomplete months and missing month boundaries. This is not a GIPS-compliant performance report. See the [GIPS explanation of valuation and cash-flow timing](https://www.gipsstandards.org/standards/gips-standards-for-firms/gips-standards-handbook-for-firms/).
+
+Historical valuations carry a previous close for at most seven calendar days to bridge weekends and holidays, never indefinitely. Calendar-month comparisons clamp month-end dates, and weekly/monthly performance requires a price at or before the reference date within seven days.
+
 ## Privacy, backup and recovery
 
-Browser storage can be cleared by private-browsing mode, browser cleanup, device loss or site-origin changes. Export JSON after material changes and keep it in an encrypted personal backup. A different Pages domain or repository name is a different browser origin and will not see the old localStorage; import your backup there.
+Browser storage can be cleared by private-browsing mode, browser cleanup, device loss or site-origin changes. Export JSON after material changes and keep it in an encrypted personal backup. A different domain is a different browser origin and will not see the old localStorage; import your backup there. Changing only the repository path keeps the same origin, so browser-local data may be shared between tracker copies on that domain.
+
+If saved orders cannot be parsed, the app shows a recovery warning and offers the original JSON for download. It preserves that original before an explicit replacement. If storage is full, saving orders first evicts only disposable market prices and retries; if it still fails, the app retains the current portfolio and reports the failure. Blocked storage does not silently pretend a save succeeded. Clear Portfolio also removes recovery data, so export it first if needed.
 
 Clearing the portfolio removes portfolio and cache records, including any obsolete manual-price record left by an older version. The Worker URL remains in browser settings so the dashboard can reconnect after a portfolio import.
 

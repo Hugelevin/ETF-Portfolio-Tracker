@@ -7,6 +7,8 @@ createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictM
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      // Online use remains available when browser settings block offline caching.
+    });
   });
 }

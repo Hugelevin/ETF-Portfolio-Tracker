@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChartNoAxesCombined, ChevronDown, MoreHorizontal, Pencil, RefreshCw, Trash2, WalletCards, X } from "lucide-react";
-import { calculateAnnualisedYield, calculateHistoryPerformance } from "../domain/portfolio";
+import { calculateAnnualisedYield, calculatePeriodPerformance } from "../domain/portfolio";
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent, formatPercentInBrackets, formatSignedMoney } from "../format";
 import { filterHistoryForRange } from "../market/history";
 import type { ChartRange, MarketRecord, PositionMetrics, PurchaseLot } from "../types";
@@ -9,6 +9,8 @@ import type { ChartMode } from "./MarketChart";
 import { StatusBadge } from "./StatusBadge";
 import { useDialogKeyboard } from "./useDialogKeyboard";
 import { useMediaQuery } from "./useMediaQuery";
+import { purchaseLotSchema } from "../domain/schema";
+import { toLocalIsoDate } from "../format";
 
 const ranges: ChartRange[] = ["1D", "1W", "1M", "3M", "1Y", "MAX"];
 const collapsedOrderCount = 3;
@@ -18,15 +20,17 @@ interface Props {
   position: PositionMetrics;
   getRecord: (range: ChartRange) => MarketRecord | null;
   loading: boolean;
+  isRangeLoading?: (range: ChartRange) => boolean;
   error?: string;
+  getChartError?: (range: ChartRange) => string | undefined;
   onClose: () => void;
   onRange: (range: ChartRange) => void;
-  onLotSave: (lot: PurchaseLot) => void;
+  onLotSave: (lot: PurchaseLot) => boolean | void;
   onLotDelete: (lot: PurchaseLot) => void;
   onHoldingDelete: () => void;
 }
 
-export function DetailDialog({ position, getRecord, loading, error, onClose, onRange, onLotSave, onLotDelete, onHoldingDelete }: Props) {
+export function DetailDialog({ position, getRecord, loading, isRangeLoading, error, getChartError, onClose, onRange, onLotSave, onLotDelete, onHoldingDelete }: Props) {
   const [range, setRange] = useState<ChartRange>("1W");
   const [chartMode, setChartMode] = useState<ChartMode>("price");
   const [chartReady, setChartReady] = useState(false);
@@ -34,6 +38,7 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
   const [showAllOrders, setShowAllOrders] = useState(false);
   const keyboard = useDialogKeyboard(onClose, "[aria-label='Close details']");
   const record = getRecord(range);
+  const chartLoading = isRangeLoading?.(range) ?? loading;
   const history = useMemo(() => record?.history ?? [], [record]);
   // Prefer daily history long enough for calendar-month performance. This is
   // independent of the selected chart range so headline metrics stay stable.
@@ -43,8 +48,8 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
     .sort((a, b) => Date.parse(b.quote.asOf) - Date.parse(a.quote.asOf))[0];
   const metricsHistory = metricsRecord?.history ?? history;
   const annualisedYield = calculateAnnualisedYield(metricsHistory, 7);
-  const weeklyPerformance = calculateHistoryPerformance(filterHistoryForRange(metricsHistory, "1W"), "1W");
-  const monthlyPerformance = calculateHistoryPerformance(filterHistoryForRange(metricsHistory, "1M"), "1M");
+  const weeklyPerformance = calculatePeriodPerformance(metricsHistory, "1W");
+  const monthlyPerformance = calculatePeriodPerformance(metricsHistory, "1M");
   const visibleHistory = useMemo(() => filterHistoryForRange(history, range), [history, range]);
   const instrument = position.instrument;
   const mobileOrders = useMediaQuery("(max-width: 767px)");
@@ -101,8 +106,10 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
             </div>
           </div>
           <div className="range-controls" aria-label="Chart time range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={() => changeRange(item)}>{item}</button>)}</div>
+          {getChartError?.(range) && <p className="chart-hint" role="status">{getChartError(range)}</p>}
           {instrument.assetType === "FUND" && range === "1D" && <p className="chart-hint">This fund publishes one NAV per trading day, so intraday prices are not available.</p>}
-          {loading ? <div className="chart-empty"><RefreshCw className="spin" aria-hidden="true" /> Loading Historical Data…</div>
+          {chartLoading && visibleHistory.length > 0 && <p role="status" className="chart-hint">Updating Historical Data…</p>}
+          {chartLoading && !visibleHistory.length ? <div className="chart-empty"><RefreshCw className="spin" aria-hidden="true" /> Loading Historical Data…</div>
             : !visibleHistory.length ? <div className="chart-empty">{chartMode === "value" ? "No holding value exists in this range because it is before your first purchase." : "Historical market prices are unavailable for this range."}</div>
               : !chartReady ? <div className="chart-empty chart-skeleton" role="status">Preparing Chart…</div>
                 : <Suspense fallback={<div className="chart-empty chart-skeleton" role="status">Preparing Chart…</div>}><MarketChart history={visibleHistory} lots={position.lots} mode={chartMode} currency={instrument.currency} averagePurchasePrice={position.averagePurchasePrice} /></Suspense>}
@@ -120,17 +127,18 @@ export function DetailDialog({ position, getRecord, loading, error, onClose, onR
         <section className="holding-danger-zone" aria-labelledby="delete-holding-title"><div><h3 id="delete-holding-title">Delete Holding</h3><p>Remove {instrument.ticker} and all {position.lots.length} {position.lots.length === 1 ? "order" : "orders"} from this browser.</p></div><button type="button" className="button danger-button" aria-label={`Delete ${instrument.ticker} holding`} onClick={onHoldingDelete}><Trash2 aria-hidden="true" /> Delete Holding</button></section>
       </div>
 
-      {editing && <LotEditor lot={editing} onClose={() => setEditing(null)} onSave={(lot) => { onLotSave(lot); setEditing(null); }} />}
+      {editing && <LotEditor lot={editing} onClose={() => setEditing(null)} onSave={(lot) => { if (onLotSave(lot) === false) return false; setEditing(null); return true; }} />}
     </section>
   </div>;
 }
 
-function PeriodPerformance({ label, performance, currency, loading }: { label: "1W" | "1M"; performance: ReturnType<typeof calculateHistoryPerformance>; currency: string; loading: boolean }) {
+function PeriodPerformance({ label, performance, currency, loading }: { label: "1W" | "1M"; performance: ReturnType<typeof calculatePeriodPerformance>; currency: string; loading: boolean }) {
   return <div><dt>{label}</dt><dd className={performance ? (performance.value < 0 ? "negative-text" : "positive-text") : undefined}>{loading ? "Loading" : performance ? formatPercent(performance.percentage) : "N/A"}</dd><small>{loading ? "Fetching history" : performance ? formatSignedMoney(performance.value, currency) : "Not enough data"}</small></div>;
 }
 
-function LotEditor({ lot, onClose, onSave }: { lot: PurchaseLot; onClose: () => void; onSave: (lot: PurchaseLot) => void }) {
+function LotEditor({ lot, onClose, onSave }: { lot: PurchaseLot; onClose: () => void; onSave: (lot: PurchaseLot) => boolean | void }) {
   const keyboard = useDialogKeyboard(onClose, "[aria-label='Close order editor']");
+  const [error, setError] = useState("");
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -142,13 +150,15 @@ function LotEditor({ lot, onClose, onSave }: { lot: PurchaseLot; onClose: () => 
       purchaseDate: String(data.get("date")),
       fees: Number(data.get("fees") || 0),
     };
-    if (updated.shares > 0 && updated.pricePerShare > 0 && updated.fees >= 0) onSave(updated);
+    const parsed = purchaseLotSchema.safeParse(updated);
+    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check order details."); return; }
+    if (onSave(parsed.data) === false) setError("Order could not be saved. Free browser storage and try again.");
   }
 
   return <div className="nested-editor" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <form ref={keyboard.dialogRef as React.RefObject<HTMLFormElement | null>} role="dialog" aria-modal="true" aria-labelledby="edit-lot-title" onSubmit={submit} onKeyDown={(event) => { keyboard.onKeyDown(event); event.stopPropagation(); }}>
       <div className="section-heading"><h3 id="edit-lot-title">Edit Order</h3><button type="button" className="icon-button modal-close" aria-label="Close order editor" onClick={onClose}><X /></button></div>
-      <div className="form-grid"><label>Shares<input name="shares" type="number" step="any" min="0.000001" defaultValue={lot.shares} required /></label><label>Purchase Price<span className="currency-input"><span aria-hidden="true">€</span><input aria-label="Purchase Price" name="price" type="number" step="any" min="0.000001" defaultValue={lot.pricePerShare} required /></span></label><label>Purchase Date<input name="date" type="date" defaultValue={lot.purchaseDate} required /></label><label>Broker Fees<span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" step="0.01" min="0" defaultValue={lot.fees} required /></span></label></div>
+      <div className="form-grid"><label>Shares<input name="shares" type="number" inputMode="decimal" step="any" min="0.000001" defaultValue={lot.shares} required /></label><label>Purchase Price<span className="currency-input"><span aria-hidden="true">€</span><input aria-label="Purchase Price" name="price" type="number" inputMode="decimal" step="any" min="0.000001" defaultValue={lot.pricePerShare} required /></span></label><label>Purchase Date<input name="date" type="date" max={toLocalIsoDate()} defaultValue={lot.purchaseDate} required /></label><label>Broker Fees<span className="currency-input"><span aria-hidden="true">€</span><input name="fees" type="number" inputMode="decimal" step="0.01" min="0" defaultValue={lot.fees} required /></span></label>{error && <p className="form-error" role="alert">{error}</p>}</div>
       <footer><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" type="submit">Save Changes</button></footer>
     </form>
   </div>;

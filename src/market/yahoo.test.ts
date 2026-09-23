@@ -99,4 +99,12 @@ describe("parseYahooChart", () => {
     expect(() => parseYahooChart(instrument, changed)).toThrow("no valid timestamped prices");
   });
 
+  it("does not mistake the start of a multi-day chart for yesterday's close", () => {
+    const changed = structuredClone(payload);
+    const meta: Record<string, unknown> = { ...changed.chart.result[0]!.meta, range: "5d" };
+    delete meta.regularMarketPreviousClose;
+    changed.chart.result[0]!.meta = meta as typeof changed.chart.result[0]["meta"];
+    expect(parseYahooChart(instrument, changed).quote.previousClose).toBeNull();
+  });
+
 });

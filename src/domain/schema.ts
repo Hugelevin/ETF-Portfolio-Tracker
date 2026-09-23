@@ -48,10 +48,11 @@ export const purchaseLotSchema = z
     instrumentId: z.string().trim().min(1),
     shares: finitePositive,
     pricePerShare: finitePositive,
-    purchaseDate: isoDate,
+    purchaseDate: isoDate.refine((value) => value <= toLocalIsoDate(), "Purchase date cannot be in the future"),
     fees: z.number().finite().nonnegative().default(0),
   })
-  .strict();
+  .strict()
+  .refine((lot) => Number.isFinite(lot.shares * lot.pricePerShare + lot.fees), "Order total is too large");
 
 export const portfolioDocumentSchema = z
   .object({

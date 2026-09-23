@@ -14,16 +14,33 @@ interface ResolveOptions {
   cached?: MarketRecord;
 }
 
-export function isValidMarketRecord(record: MarketRecord | undefined, instrument: Instrument): record is MarketRecord {
-  return Boolean(
-    record &&
-    record.quote?.instrumentId === instrument.id &&
-    record.quote?.currency === instrument.currency &&
-    Number.isFinite(record.quote?.price) &&
-    record.quote?.price > 0 &&
-    Array.isArray(record?.history) &&
-    record.history.every((point) => Number.isFinite(point.close) && point.close > 0 && !Number.isNaN(Date.parse(point.timestamp))),
-  );
+export function instrumentIdentity(instrument: Instrument): string {
+  return JSON.stringify([instrument.isin, instrument.micCode ?? instrument.exchange, instrument.currency, instrument.assetType, instrument.yahooSymbol ?? ""]);
+}
+
+export function isMarketRecord(value: unknown): value is MarketRecord {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<MarketRecord>;
+  const quote = record.quote;
+  return Boolean(quote && typeof quote.instrumentId === "string" &&
+    typeof quote.currency === "string" && typeof quote.exchange === "string" &&
+    Number.isFinite(quote.price) && quote.price > 0 &&
+    (quote.previousClose === null || (Number.isFinite(quote.previousClose) && quote.previousClose > 0)) &&
+    typeof quote.asOf === "string" && Number.isFinite(Date.parse(quote.asOf)) &&
+    typeof quote.fetchedAt === "string" && Number.isFinite(Date.parse(quote.fetchedAt)) &&
+    (quote.source === "yahoo" || quote.source === "cache") &&
+    typeof quote.stale === "boolean" && typeof quote.label === "string" &&
+    (record.identity === undefined || typeof record.identity === "string") &&
+    Array.isArray(record.history) && record.history.length > 0 &&
+    record.history.every((point) => point && typeof point.timestamp === "string" &&
+      Number.isFinite(Date.parse(point.timestamp)) && Number.isFinite(point.close) && point.close > 0));
+}
+
+export function isValidMarketRecord(record: unknown, instrument: Instrument): record is MarketRecord {
+  if (!isMarketRecord(record) || record.quote.instrumentId !== instrument.id || record.quote.currency !== instrument.currency) return false;
+  // Legacy prices cannot prove their ISIN/provider identity. Refetch them rather
+  // than risk valuing a newly imported listing with a reused local id.
+  return record.identity === instrumentIdentity(instrument);
 }
 
 export async function resolveMarketData(options: ResolveOptions): Promise<MarketResolution> {

@@ -33,19 +33,13 @@ interface ChartTooltipProps {
   mode: ChartMode;
 }
 
-function chartLabel(timestamp: string, intraday: boolean) {
-  return new Date(timestamp).toLocaleString("en-GB", intraday
-    ? { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }
-    : { day: "2-digit", month: "short", year: "numeric" });
-}
+const intradayFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const dailyFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+const priceFormatter = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
+const compactFormatter = new Intl.NumberFormat("en-GB", { notation: "compact" });
 
-function ownedPosition(lots: PurchaseLot[], timestamp: string) {
-  const date = timestamp.slice(0, 10);
-  const owned = lots.filter((lot) => lot.purchaseDate <= date);
-  return {
-    shares: owned.reduce((sum, lot) => sum + lot.shares, 0),
-    invested: owned.reduce((sum, lot) => sum + lot.shares * lot.pricePerShare, 0),
-  };
+function chartLabel(timestamp: string, intraday: boolean) {
+  return (intraday ? intradayFormatter : dailyFormatter).format(new Date(timestamp));
 }
 
 function ChartTooltip({ active, payload, currency, mode }: ChartTooltipProps) {
@@ -70,22 +64,21 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
     index > 0 && point.timestamp.slice(0, 10) === history[index - 1]?.timestamp.slice(0, 10)
   )), [history]);
   const priceData = useMemo(() => {
+    if (mode !== "price") return [];
     const firstPrice = history[0]?.close ?? null;
     return history.map((point): ChartDatum => {
-      const owned = ownedPosition(lots, point.timestamp);
       const change = firstPrice === null ? 0 : point.close - firstPrice;
       return {
         timestamp: point.timestamp,
         label: chartLabel(point.timestamp, intraday),
         price: point.close,
-        marketValue: owned.shares > 0 ? owned.shares * point.close : undefined,
-        investedValue: owned.shares > 0 ? owned.invested : undefined,
         change,
         changePercentage: firstPrice && firstPrice > 0 ? (change / firstPrice) * 100 : null,
       };
     });
-  }, [history, intraday, lots]);
+  }, [history, intraday, mode]);
   const valueData = useMemo(() => {
+    if (mode !== "value") return [];
     const priceByTimestamp = new Map(history.map((point) => [point.timestamp, point.close]));
     return buildPositionValueHistory(lots, history).map((point): ChartDatum => {
       const price = priceByTimestamp.get(point.timestamp) ?? 0;
@@ -98,9 +91,10 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
         changePercentage: point.investedValue > 0 ? (change / point.investedValue) * 100 : null,
       };
     });
-  }, [history, lots, intraday]);
+  }, [history, lots, intraday, mode]);
   const data = mode === "price" ? priceData : valueData;
-  const chartData = useMemo(() => downsamplePoints(data, 90), [data]);
+  const chartData = useMemo(() => downsamplePoints(data, 90, (point) => mode === "price" ? point.price : point.marketValue ?? 0,
+    mode === "value" ? (point) => point.investedValue ?? 0 : undefined), [data, mode]);
   useEffect(() => {
     setTableOpen(false);
     setVisibleRows(50);
@@ -142,15 +136,15 @@ export function MarketChart({ history, lots, mode, currency, averagePurchasePric
           <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dfe7e4" />
           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={36} />
           <YAxis domain={domain} tickFormatter={(value: number) => mode === "price"
-            ? new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)
-            : new Intl.NumberFormat("en-GB", { notation: "compact" }).format(value)} tickLine={false} axisLine={false} width={58} />
+            ? priceFormatter.format(value)
+            : compactFormatter.format(value)} tickLine={false} axisLine={false} width={58} />
           <Tooltip content={<ChartTooltip currency={currency} mode={mode} />} cursor={{ stroke: "#94aaa4", strokeDasharray: "3 3" }} />
           {mode === "price" ? <>
-            <Area type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={chartData.length <= 2 ? { r: 3 } : false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="price" name="Market Price" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={chartData.length <= 2 ? { r: 3 } : false} />
             {averageBuyVisible && <ReferenceLine y={averagePurchasePrice} stroke="#d18b3f" strokeWidth={2} strokeDasharray="6 5" />}
           </> : <>
-            <Area type="monotone" dataKey="marketValue" name="Holding Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={chartData.length <= 2 ? { r: 3 } : false} />
-            <Line type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={chartData.length <= 2 ? { r: 3 } : false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="marketValue" name="Holding Value" stroke="#296f63" strokeWidth={2.5} fill="url(#marketFill)" dot={chartData.length <= 2 ? { r: 3 } : false} />
+            <Line isAnimationActive={false} type="stepAfter" dataKey="investedValue" name="Invested Cost" stroke="#d18b3f" strokeWidth={2} dot={chartData.length <= 2 ? { r: 3 } : false} />
           </>}
         </ComposedChart>
       </ResponsiveContainer>

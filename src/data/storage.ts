@@ -1,5 +1,6 @@
 import { emptyPortfolio, parsePortfolioDocument } from "../domain/schema";
 import { VERIFIED_INSTRUMENTS } from "../config/instruments";
+import { isMarketRecord } from "../market/service";
 import type {
   AppSettings,
   MarketRecord,
@@ -54,52 +55,100 @@ function parseJson<T>(value: string | null, fallback: T): T {
   }
 }
 
-export function createPortfolioStorage(storage: Storage) {
+export function createPortfolioStorage(source: Storage | (() => Storage)) {
+  // Access the browser getter inside guarded operations too: some privacy modes
+  // throw before getItem can even be called.
+  const getStorage = () => typeof source === "function" ? source() : source;
+  const storage = {
+    getItem: (key: string) => getStorage().getItem(key),
+    setItem: (key: string, value: string) => getStorage().setItem(key, value),
+    removeItem: (key: string) => getStorage().removeItem(key),
+  };
   // The removed provider stored its credential separately; erase it during migration.
-  storage.removeItem(LEGACY_EODHD_KEY);
+  try { storage.removeItem(LEGACY_EODHD_KEY); } catch { /* Private-mode storage can be unavailable. */ }
+  let loadWarning = "";
+  let recoveryJson: string | null = null;
+  function read(key: string): string | null {
+    try { return storage.getItem(key); }
+    catch { loadWarning = "Browser storage is unavailable. Changes cannot be saved on this device."; return null; }
+  }
+  function writeImportant(key: string, value: string) {
+    try { storage.setItem(key, value); }
+    catch (error) {
+      if (!(error instanceof DOMException) || error.name !== "QuotaExceededError") throw error;
+      storage.removeItem(KEYS.marketCache);
+      storage.setItem(key, value);
+    }
+  }
   return {
+    getLoadWarning: () => loadWarning,
+    getRecoveryJson: () => recoveryJson,
     loadPortfolio(): PortfolioDocument {
-      const raw = parseJson<unknown>(storage.getItem(KEYS.portfolio), null);
-      if (raw === null) return emptyPortfolio();
+      recoveryJson = read(`${KEYS.portfolio}.recovery`);
+      if (recoveryJson !== null) loadWarning = "Previous unreadable portfolio data is preserved. Export recovery data before clearing this portfolio.";
+      const saved = read(KEYS.portfolio);
+      if (saved === null) return emptyPortfolio();
       try {
-        return applyInstrumentDefaults(parsePortfolioDocument(raw));
+        return applyInstrumentDefaults(parsePortfolioDocument(JSON.parse(saved)));
       } catch {
+        recoveryJson = saved;
+        loadWarning = "Saved portfolio could not be read. Export recovery data or import a backup. The original is still saved.";
         return emptyPortfolio();
       }
     },
     savePortfolio(portfolio: PortfolioDocument): PortfolioDocument {
       const validated = applyInstrumentDefaults(parsePortfolioDocument(portfolio));
-      storage.setItem(KEYS.portfolio, JSON.stringify(validated));
+      // Preserve unreadable data before an explicit replacement; never silently lose it.
+      if (recoveryJson !== null) writeImportant(`${KEYS.portfolio}.recovery`, recoveryJson);
+      writeImportant(KEYS.portfolio, JSON.stringify(validated));
+      loadWarning = recoveryJson !== null ? "Previous unreadable portfolio data is preserved. Export recovery data before clearing this portfolio." : "";
       return validated;
     },
     clearPortfolio(): void {
-      storage.removeItem(KEYS.portfolio);
       storage.removeItem(KEYS.marketCache);
       storage.removeItem(KEYS.legacyManualPrices);
+      storage.removeItem(`${KEYS.portfolio}.recovery`);
+      storage.removeItem(KEYS.portfolio);
+      recoveryJson = null;
+      loadWarning = "";
     },
     loadSettings(): AppSettings {
-      const publicSettings = parseJson<Partial<AppSettings>>(
-        storage.getItem(KEYS.settings),
+      const publicSettings = parseJson<Partial<AppSettings> | null>(
+        read(KEYS.settings),
         {},
       );
       return {
         proxyUrl:
-          typeof publicSettings.proxyUrl === "string"
+          typeof publicSettings?.proxyUrl === "string"
             ? publicSettings.proxyUrl
             : defaultSettings.proxyUrl,
       };
     },
     saveSettings(settings: AppSettings): void {
-      storage.setItem(
+      writeImportant(
         KEYS.settings,
         JSON.stringify({ proxyUrl: settings.proxyUrl.trim() }),
       );
     },
     loadMarketCache(): Record<string, MarketRecord> {
-      return parseJson(storage.getItem(KEYS.marketCache), {});
+      const value = parseJson<unknown>(read(KEYS.marketCache), {});
+      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+      return Object.fromEntries(Object.entries(value).filter(([, record]) => isMarketRecord(record)));
     },
-    saveMarketCache(cache: Record<string, MarketRecord>): void {
-      storage.setItem(KEYS.marketCache, JSON.stringify(cache));
+    saveMarketCache(cache: Record<string, MarketRecord>): boolean {
+      // Prices are disposable; reserve storage for orders and never let a full
+      // cache break a successful refresh or prevent portfolio persistence.
+      const entries = Object.entries(cache).sort(([, a], [, b]) => Date.parse(b.quote.fetchedAt) - Date.parse(a.quote.fetchedAt));
+      const bounded: Record<string, MarketRecord> = {};
+      let size = 0;
+      for (const [key, record] of entries) {
+        const recordSize = JSON.stringify(record).length + key.length + 4;
+        if (size + recordSize > 1_500_000) continue;
+        bounded[key] = record;
+        size += recordSize;
+      }
+      try { storage.setItem(KEYS.marketCache, JSON.stringify(bounded)); return true; }
+      catch { return false; }
     },
   };
 }

@@ -354,6 +354,11 @@ test("opens portfolio history and shows compact chart summaries", async ({ page 
   await expect(page.locator(".portfolio-history")).toHaveJSProperty("tagName", "SECTION");
   await expect(page.locator(".portfolio-history > summary")).toHaveCount(0);
   await expect(page.locator(".portfolio-history-summary")).toContainText(/Change .* \([+-]\d/);
+  const ticks = page.locator(".portfolio-history-chart .recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value");
+  await expect(ticks.first()).toBeVisible();
+  const labels = await ticks.allTextContents();
+  expect(labels.length).toBeGreaterThan(2);
+  expect(new Set(labels).size).toBe(labels.length);
   const dataToggle = page.locator(".portfolio-history .data-alternative > summary");
   await expect(dataToggle).toBeVisible();
   await page.locator(".portfolio-history .range-controls button").last().focus();
@@ -534,6 +539,27 @@ test("shows contribution-adjusted risk statistics in portfolio insights", async 
     await expect(risk.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(risk).toContainText("2 recovered drawdowns");
+  const methodology = risk.locator(".risk-methodology");
+  await expect(methodology).not.toHaveAttribute("open", "");
+  await expect(methodology.locator("p").first()).not.toBeVisible();
+  await methodology.locator("summary").click();
+  await expect(methodology.locator("p").first()).toBeVisible();
+  await expect(risk.locator(".risk-heading")).toContainText("daily observations");
+});
+
+test("keeps today's quote stable after opening historical charts and after reload", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
+  const summary = page.locator(".summary-grid");
+  const initial = await summary.innerText();
+  await page.locator(".portfolio-insights > summary").click();
+  await expect(page.locator(".risk-panel")).toContainText("2 recovered drawdowns");
+  // MAX's mocked price is 132, versus the canonical current quote of 80.
+  await expect(summary).toHaveText(initial, { useInnerText: true });
+  await page.waitForFunction(() => Boolean(JSON.parse(localStorage.getItem("etf-tracker.market-cache.v1") ?? "{}")["jedi-xetra-eur:MAX"]));
+  await page.reload();
+  await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();
+  await expect(summary).toHaveText(initial, { useInnerText: true });
 });
 
 test("orders the overview cards by value, invested, return and today", async ({ page }) => {

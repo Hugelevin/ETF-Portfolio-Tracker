@@ -36,7 +36,7 @@ interface ChartTooltipProps {
 const intradayFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 const dailyFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 const priceFormatter = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
-const compactFormatter = new Intl.NumberFormat("en-GB", { notation: "compact" });
+const compactFormatter = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 2 });
 
 function chartLabel(timestamp: string, intraday: boolean) {
   return (intraday ? intradayFormatter : dailyFormatter).format(new Date(timestamp));

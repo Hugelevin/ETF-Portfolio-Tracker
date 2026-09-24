@@ -8,7 +8,7 @@ export type PortfolioHistoryMode = "value" | "return";
 
 interface Datum extends PortfolioValuePoint { label: string; returnPercentage: number }
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
-const compactFormatter = new Intl.NumberFormat("en-GB", { notation: "compact" });
+const compactFormatter = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 2 });
 
 function TooltipContent({ active, payload, mode }: { active?: boolean; payload?: Array<{ payload: Datum }>; mode: PortfolioHistoryMode }) {
   const point = payload?.[0]?.payload;

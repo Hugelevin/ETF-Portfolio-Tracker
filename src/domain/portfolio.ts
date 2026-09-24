@@ -480,7 +480,7 @@ export function calculatePortfolioRiskStatistics(
     end.setUTCMonth(end.getUTCMonth() + 1);
     // Only completed calendar months, with a recent close at each boundary.
     const latestTime = Date.parse(sorted.at(-1)!.timestamp);
-    const currentMonthFinished = latestTime >= end.getTime() - DAY_MS;
+    const currentMonthFinished = Date.now() >= end.getTime() && latestTime >= end.getTime() - 7 * DAY_MS;
     const expectedPrevious = subtractUtcMonths(new Date(`${month}-01T00:00:00Z`), 1).toISOString().slice(0, 7);
     const startTime = Date.parse(`${month}-01T00:00:00Z`);
     const boundariesCovered = startTime - Date.parse(previous.timestamp) <= 7 * DAY_MS && end.getTime() - Date.parse(point.timestamp) <= 7 * DAY_MS;

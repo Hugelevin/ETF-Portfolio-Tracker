@@ -81,14 +81,14 @@ describe("portfolio dashboard", () => {
   it("labels persisted market data as stale cache on load", () => {
     const instrument: Instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1W": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
 
     render(<App />);
 
     expect(screen.getAllByText("Cached").length).toBeGreaterThan(0);
   });
 
-  it("hydrates valuation from another range while keeping chart ranges separate", async () => {
+  it("does not hydrate valuation from historical chart ranges", async () => {
     const user = userEvent.setup();
     const instrument: Instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 1, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
@@ -99,8 +99,8 @@ describe("portfolio dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getAllByText("€82.00").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("1 of 1 EUR positions valued")).toBeInTheDocument();
+    expect(screen.queryByText("€82.00")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("0 of 1 EUR positions valued")).toBeInTheDocument();
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
     const detail = await screen.findByRole("dialog", { name: /JEDI/ });
     expect(await screen.findByText("Historical market prices are unavailable for this range.")).toBeInTheDocument();
@@ -130,11 +130,11 @@ describe("portfolio dashboard", () => {
     expect(within(table).queryByText("€1,950.00")).not.toBeInTheDocument();
   });
 
-  it("does not present a one-month cache as one-year history", async () => {
+  it("does not present a one-week cache as one-year history", async () => {
     const user = userEvent.setup();
     const instrument: Instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 25, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-13T10:00:00Z", close: 78 }, { timestamp: "2026-07-13T10:00:00Z", close: 80 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1W": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-13T10:00:00Z", fetchedAt: "2026-07-13T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-06-13T10:00:00Z", close: 78 }, { timestamp: "2026-07-13T10:00:00Z", close: 80 }] } }));
 
     render(<App />);
     await user.click(screen.getAllByRole("button", { name: "Open JEDI details" })[0]!);
@@ -173,7 +173,7 @@ describe("portfolio dashboard", () => {
   it("uses cached fund NAV and shows Moneybase-style market return before fees", () => {
     const instrument: Instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund - EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1W": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
 
     render(<App />);
 
@@ -185,7 +185,7 @@ describe("portfolio dashboard", () => {
   it("keeps broker fees separate from invested capital and market return", () => {
     const instrument: Instrument = { id: "jedi-xetra-eur", name: "VanEck Space Innovators UCITS ETF", ticker: "JEDI", isin: "IE000YU9K6K2", exchange: "Xetra", micCode: "XETR", currency: "EUR", assetType: "ETF", yahooSymbol: "JEDI.DE" };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "lot", instrumentId: instrument.id, shares: 2, pricePerShare: 70, purchaseDate: "2026-01-02", fees: 5 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1M": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "jedi-xetra-eur:1W": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 80, previousClose: 79, currency: "EUR", exchange: "XETRA", asOf: "2026-07-10T10:00:00Z", fetchedAt: "2026-07-10T10:01:00Z", source: "yahoo", label: "Market data", stale: false }, history: [{ timestamp: "2026-07-10T10:00:00Z", close: 80 }] } }));
 
     render(<App />);
 
@@ -218,7 +218,7 @@ describe("portfolio dashboard", () => {
     const user = userEvent.setup();
     const instrument: Instrument = { id: "ummepsa-nav-eur", name: "UBS (Irl) Select Money Market Fund - EUR P Acc", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F", annualYieldPercentage: 2.28 };
     window.localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify({ schemaVersion: 1, baseCurrency: "EUR", instruments: [instrument], lots: [{ id: "cash", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2026-06-01", fees: 0 }] }));
-    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1M": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
+    window.localStorage.setItem("etf-tracker.market-cache.v1", JSON.stringify({ "ummepsa-nav-eur:1W": { identity: instrumentIdentity(instrument), quote: { instrumentId: instrument.id, price: 100.2, previousClose: 100.19, currency: "EUR", exchange: "Daily Fund NAV", asOf: "2026-07-10T08:00:00Z", fetchedAt: "2026-07-10T08:01:00Z", source: "yahoo", label: "Fund NAV", stale: false }, history: [{ timestamp: "2026-07-03T08:00:00Z", close: 100.1 }, { timestamp: "2026-07-10T08:00:00Z", close: 100.2 }] } }));
     render(<App />);
 
     await user.click(screen.getAllByRole("button", { name: "Open UMMEPSA details" })[0]!);

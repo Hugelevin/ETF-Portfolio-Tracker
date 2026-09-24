@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BarChart3, ChevronDown, LineChart, RefreshCw } from "lucide-react";
 import { buildPortfolioValueHistory, buildTimeWeightedReturnSeries, calculateMoneyWeightedReturn, calculatePortfolioRiskStatistics } from "../domain/portfolio";
-import { formatMoney, formatPercent, formatPercentInBrackets } from "../format";
+import { formatDate, formatMoney, formatPercent, formatPercentInBrackets } from "../format";
 import type { ChartRange, MarketRecord, PositionMetrics } from "../types";
 import type { PortfolioHistoryMode } from "./PortfolioHistoryChart";
 
@@ -51,6 +51,8 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
   const riskHistory = useMemo(() => riskLoaded ? buildPortfolioValueHistory(basePositions, riskHistories, baseCurrency) : [], [riskLoaded, basePositions, riskHistories, baseCurrency]);
   const riskSufficient = riskHistory.length >= 2;
   const risk = useMemo(() => calculatePortfolioRiskStatistics(riskHistory), [riskHistory]);
+  const missingRiskHistory = basePositions.filter((position) => (riskHistories[position.instrument.id]?.length ?? 0) < 2).map((position) => position.instrument.ticker);
+  const hourlyHistory = basePositions.filter((position) => getRecord(position.instrument.id, "MAX")?.historyDerivedFromIntraday).map((position) => position.instrument.ticker);
   const rangeFailures = basePositions.filter((position) => getError?.(position.instrument.id, range)).map((position) => position.instrument.ticker);
   const riskFailures = basePositions.filter((position) => getError?.(position.instrument.id, "MAX")).map((position) => position.instrument.ticker);
 
@@ -90,7 +92,7 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
         <div className="portfolio-history-heading"><LineChart aria-hidden="true" /><strong id="portfolio-history-title">Portfolio History</strong></div>
         <div className="portfolio-history-body">
           <div className="portfolio-history-controls"><div className="view-controls portfolio-view-controls" role="group" aria-label="Portfolio history view"><button type="button" className={historyMode === "value" ? "active" : ""} aria-pressed={historyMode === "value"} onClick={() => setHistoryMode("value")}>Value</button><button type="button" className={historyMode === "return" ? "active" : ""} aria-pressed={historyMode === "return"} onClick={() => setHistoryMode("return")}>Return</button></div><div className="range-controls" aria-label="Portfolio history range">{ranges.map((item) => <button key={item} className={item === range ? "active" : ""} aria-pressed={item === range} onClick={(event) => { event.preventDefault(); selectRange(item); }}>{item}</button>)}</div></div>
-          {historyMode === "return" && <p className="risk-coverage">Estimated return · Cash flows treated as period-end · Before fees</p>}
+          {historyMode === "return" && <p className="history-method-note">Contribution-adjusted return · Before fees</p>}
           {rangeFailures.length > 0 && <p className="risk-coverage" role="status">History refresh failed: {rangeFailures.join(", ")}. Saved history is shown where available.</p>}
           {!complete ? <div className="insight-empty">Complete historical prices are not available for every holding in this range.</div> : !history.length ? <div className="insight-empty">Portfolio history begins after your first order.</div> : <>
             <p className="portfolio-history-summary">{historyMode === "value" ? <>Latest {formatMoney(latest?.marketValue ?? null)}<span className="summary-separator" aria-hidden="true">|</span>Change {formatMoney(change)} {formatPercentInBrackets(changePercent)}</> : <>Market Return {formatPercent(latestReturn)}<span className="summary-separator" aria-hidden="true">|</span>{formatMoney((latest?.marketValue ?? 0) - (latest?.investedValue ?? 0))} Before Fees</>}</p>
@@ -100,17 +102,17 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
       </section>
 
       <section className="risk-panel" role="region" aria-labelledby="risk-title">
-        <div className="risk-heading"><span><Activity aria-hidden="true" /><span><strong id="risk-title">Risk Statistics</strong><small>Contribution-adjusted, using maximum available history</small></span></span>{!riskLoaded && <button type="button" className="button secondary" onClick={requestRiskHistory} disabled={loading}><RefreshCw className={loading ? "spin" : ""} aria-hidden="true" /> {loading ? "Loading History" : "Retry History"}</button>}</div>
+        <div className="risk-heading"><span><Activity aria-hidden="true" /><span><strong id="risk-title">Risk Statistics</strong><small>{riskSufficient ? `${formatDate(riskHistory[0]!.timestamp)} - ${formatDate(riskHistory.at(-1)!.timestamp)} · ${riskHistory.length} daily observations` : "Based on available daily history"}</small></span></span>{(!riskLoaded || !riskSufficient) && <button type="button" className="button secondary" onClick={requestRiskHistory} disabled={loading}><RefreshCw className={loading ? "spin" : ""} aria-hidden="true" /> {loading ? "Loading History" : "Retry History"}</button>}</div>
         {!riskLoaded && <p className="risk-coverage" role="status">Complete historical prices are required for every EUR holding. Statistics remain unavailable until full history loads.</p>}
         {riskFailures.length > 0 && <p className="risk-coverage" role="status">Risk history refresh failed: {riskFailures.join(", ")}. Saved history is used where available.</p>}
-        {riskLoaded && !riskSufficient && <p className="risk-coverage" role="status">More historical observations are required before risk statistics can be calculated.</p>}
-        {riskLoaded && riskSufficient && <p className="risk-coverage">Estimates from available prices · Cash flows treated as period-end · Before fees</p>}
+        {riskLoaded && !riskSufficient && <p className="risk-coverage" role="status">{missingRiskHistory.length ? `Yahoo history is limited for ${missingRiskHistory.join(", ")}.` : "Not enough overlapping price history."} More historical prices are needed, not more visits to this app.</p>}
+        <details className="risk-methodology"><summary>How These Are Calculated</summary><p>Returns exclude broker fees and adjust for orders as end-of-day cash flows. Only completed calendar months with covered boundaries are compared. Statistics cover the dates shown, not necessarily your entire investing history. Yahoo may limit daily history to one year.</p>{hourlyHistory.length > 0 && <p>{hourlyHistory.join(", ")}: daily history uses the last available hourly price because Yahoo's daily feed is incomplete.</p>}</details>
         <dl className="risk-grid">
           <RiskStat label="Maximum Drawdown" value={formatDrawdown(risk.maximumDrawdownPercentage)} detail="Largest peak-to-trough fall" tone="negative" />
           <RiskStat label="Current Drawdown" value={formatDrawdown(risk.currentDrawdownPercentage)} detail="Distance below previous peak" tone={risk.currentDrawdownPercentage !== null && risk.currentDrawdownPercentage < 0 ? "negative" : "neutral"} />
           <RiskStat label="Highest Portfolio Value" value={formatMoney(risk.highestPortfolioValue, baseCurrency)} detail="Highest recorded market value" />
           <RiskStat label="Annualised Volatility" value={risk.annualisedVolatilityPercentage === null ? "Unavailable" : `${risk.annualisedVolatilityPercentage.toFixed(2)}%`} detail="Variation in contribution-adjusted returns" />
-          <div className="risk-stat risk-months"><dt>Best and Worst Month</dt><dd><span className={riskTone(risk.bestMonth?.percentage)}>{risk.bestMonth ? formatPercent(risk.bestMonth.percentage) : "Unavailable"}<small>{formatRiskMonth(risk.bestMonth?.month)}</small></span><span className={riskTone(risk.worstMonth?.percentage)}>{risk.worstMonth ? formatPercent(risk.worstMonth.percentage) : "Unavailable"}<small>{formatRiskMonth(risk.worstMonth?.month)}</small></span></dd></div>
+          <div className="risk-stat risk-months"><dt>Best and Worst Month</dt><dd><span className={riskTone(risk.bestMonth?.percentage)}>{risk.bestMonth ? formatPercent(risk.bestMonth.percentage) : "Unavailable"}<small>Best · {formatRiskMonth(risk.bestMonth?.month)}</small></span><span className={riskTone(risk.worstMonth?.percentage)}>{risk.worstMonth ? formatPercent(risk.worstMonth.percentage) : "Unavailable"}<small>Worst · {formatRiskMonth(risk.worstMonth?.month)}</small></span></dd></div>
           <RiskStat label="Recovery Time" value={risk.averageRecoveryDays === null ? "Unavailable" : `${Math.round(risk.averageRecoveryDays)} days average`} detail={risk.averageRecoveryDays === null ? "No completed drawdown yet" : `${risk.recoveredDrawdowns} recovered drawdowns · Longest ${Math.round(risk.longestRecoveryDays ?? 0)} days`} />
         </dl>
       </section>

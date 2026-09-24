@@ -26,6 +26,27 @@ function deferred() {
 beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); });
 
 describe("market updates", () => {
+  it("never lets a chart response change the dashboard daily return", async () => {
+    const current = record(80);
+    const history = record(90);
+    history.quote.previousClose = 100;
+    history.quote.asOf = new Date(Date.now() + 60_000).toISOString();
+    vi.mocked(fetchYahooRecord).mockImplementation(async (_instrument, range) => range === "MAX" ? history : current);
+    const storage = createPortfolioStorage(localStorage);
+    const { result } = renderHook(() => useMarketData(instruments, "https://market.test", storage));
+    await waitFor(() => expect(result.current.records[instrument.id]?.quote.price).toBe(80));
+    await act(async () => { await result.current.refreshOne(instrument, "MAX"); });
+    expect(result.current.records[instrument.id]?.quote).toEqual(current.quote);
+    expect(result.current.getRecord(instrument.id, "MAX")?.quote.price).toBe(90);
+  });
+
+  it("does not hydrate a dashboard price from an arbitrary chart cache", () => {
+    const storage = createPortfolioStorage(localStorage);
+    storage.saveMarketCache({ [`${instrument.id}:MAX`]: record(900) });
+    const { result } = renderHook(() => useMarketData(instruments, "", storage));
+    expect(result.current.records[instrument.id]).toBeUndefined();
+    expect(result.current.getRecord(instrument.id, "MAX")).not.toBeNull();
+  });
   it("does not attach a late MAX history error to a successfully refreshed current quote", async () => {
     const weekly = deferred(); const maximum = deferred();
     vi.mocked(fetchYahooRecord).mockImplementation((_instrument, range) => range === "MAX" ? maximum.promise : weekly.promise);

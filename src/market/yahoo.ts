@@ -110,29 +110,36 @@ export function parseYahooChart(
   if (!latest) throw new Error("Yahoo returned no valid timestamped prices");
 
   const fetchedMs = Date.parse(fetchedAt);
-  const asOfMs = Date.parse(latest.timestamp);
+  const hasCurrentQuote = finitePositive(meta.regularMarketPrice) && finitePositive(meta.regularMarketTime);
+  const price = hasCurrentQuote ? meta.regularMarketPrice as number : latest.close;
+  const asOf = hasCurrentQuote ? new Date((meta.regularMarketTime as number) * 1000).toISOString() : latest.timestamp;
+  const asOfMs = Date.parse(asOf);
   const session = instrument.assetType === "ETF" ? marketSession(meta, fetchedMs) : undefined;
   const staleAfterMs = instrument.assetType === "FUND" ? 72 * 60 * 60 * 1_000 : 24 * 60 * 60 * 1_000;
-  const timestampedPreviousClose = previousTradingClose(history);
-  const previousClose = timestampedPreviousClose ?? (
-    finitePositive(meta.regularMarketPreviousClose)
+  const dailyOrIntraday = !meta.dataGranularity || ["1d", "1h", "60m", "5m"].includes(String(meta.dataGranularity));
+  // A chart's final intraday candle is not necessarily the exchange's closing
+  // auction price. Yahoo's session baseline takes precedence for ETFs.
+  const timestampedPreviousClose = dailyOrIntraday ? previousTradingClose(history) : null;
+  const providerPreviousClose = finitePositive(meta.regularMarketPreviousClose)
       ? meta.regularMarketPreviousClose
       // chartPreviousClose is the start-of-range baseline, not yesterday's
       // close. Only a one-day response can safely use that field.
       : meta.range === "1d" && finitePositive(meta.chartPreviousClose)
         ? meta.chartPreviousClose
-        : finitePositive(meta.previousClose) ? meta.previousClose : null
-  );
+        : finitePositive(meta.previousClose) ? meta.previousClose : null;
+  const previousClose = instrument.assetType === "FUND"
+    ? timestampedPreviousClose ?? providerPreviousClose
+    : providerPreviousClose;
 
   return {
     identity: instrumentIdentity(instrument),
     quote: {
       instrumentId: instrument.id,
-      price: latest.close,
+      price,
       previousClose,
       currency: String(meta.currency),
       exchange: String(meta.fullExchangeName ?? meta.exchangeName ?? instrument.exchange),
-      asOf: latest.timestamp,
+      asOf,
       fetchedAt,
       source: "yahoo",
       label: instrument.assetType === "FUND" ? "Fund NAV" : "Market Price",
@@ -140,5 +147,6 @@ export function parseYahooChart(
       marketSession: session,
     },
     history,
+    historyInterval: typeof meta.dataGranularity === "string" ? meta.dataGranularity : undefined,
   };
 }

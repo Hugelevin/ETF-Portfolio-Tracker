@@ -53,6 +53,8 @@ export interface MarketPoint {
 export interface MarketRecord {
   quote: MarketQuote;
   history: MarketPoint[];
+  historyInterval?: string;
+  historyDerivedFromIntraday?: boolean;
   /** Prevent an imported instrument with a reused id from inheriting another listing's cache. */
   identity?: string;
 }

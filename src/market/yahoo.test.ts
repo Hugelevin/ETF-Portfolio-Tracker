@@ -35,6 +35,20 @@ const payload = {
 };
 
 describe("parseYahooChart", () => {
+  it("prefers Yahoo's previous session close over an incomplete chart candle", () => {
+    const changed = structuredClone(payload);
+    changed.chart.result[0]!.timestamp = [Date.parse("2026-07-10T14:00:00Z") / 1000, Date.parse("2026-07-13T08:00:00Z") / 1000];
+    changed.chart.result[0]!.indicators.quote[0]!.close = [81, 80];
+    expect(parseYahooChart(instrument, changed).quote.previousClose).toBe(79);
+  });
+
+  it("does not derive daily change from weekly candles", () => {
+    const changed = structuredClone(payload);
+    changed.chart.result[0]!.meta = { ...changed.chart.result[0]!.meta, regularMarketPreviousClose: undefined, dataGranularity: "1wk" } as unknown as typeof changed.chart.result[0]["meta"];
+    changed.chart.result[0]!.timestamp = [Date.parse("2026-07-06T08:00:00Z") / 1000, Date.parse("2026-07-13T08:00:00Z") / 1000];
+    changed.chart.result[0]!.indicators.quote[0]!.close = [70, 80];
+    expect(parseYahooChart(instrument, changed).quote.previousClose).toBeNull();
+  });
   it("uses the latest non-null timestamped point", () => {
     const record = parseYahooChart(
       instrument,

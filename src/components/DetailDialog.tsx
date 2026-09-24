@@ -46,7 +46,7 @@ export function DetailDialog({ position, getRecord, loading, isRangeLoading, err
     .map((candidateRange) => getRecord(candidateRange))
     .filter((candidate): candidate is MarketRecord => Boolean(candidate?.history.length))
     .sort((a, b) => Date.parse(b.quote.asOf) - Date.parse(a.quote.asOf))[0];
-  const metricsHistory = metricsRecord?.history ?? history;
+  const metricsHistory = metricsRecord?.history ?? getRecord("1W")?.history ?? history;
   const annualisedYield = calculateAnnualisedYield(metricsHistory, 7);
   const weeklyPerformance = calculatePeriodPerformance(metricsHistory, "1W");
   const monthlyPerformance = calculatePeriodPerformance(metricsHistory, "1M");

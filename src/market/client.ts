@@ -64,12 +64,32 @@ export async function fetchYahooRecord(
   signal?: AbortSignal,
 ): Promise<MarketRecord> {
   if (!instrument.yahooSymbol) throw new Error("No Yahoo Finance symbol is configured for this instrument");
-  const url = endpoint(proxyUrl, "/yahoo/chart");
   const query = instrument.assetType === "FUND" ? FUND_RANGE_QUERY[range] : RANGE_QUERY[range];
-  url.searchParams.set("symbol", instrument.yahooSymbol);
-  url.searchParams.set("range", query.range);
-  url.searchParams.set("interval", query.interval);
-  return parseYahooChart(instrument, await fetchJson(url, { signal }));
+  const request = async (providerRange: string, interval: string) => {
+    const url = endpoint(proxyUrl, "/yahoo/chart");
+    url.searchParams.set("symbol", instrument.yahooSymbol!);
+    url.searchParams.set("range", providerRange);
+    url.searchParams.set("interval", interval);
+    return parseYahooChart(instrument, await fetchJson(url, { signal }));
+  };
+  let record = await request(query.range, query.interval);
+  const longRange = range === "3M" || range === "1Y" || range === "MAX";
+  // Yahoo silently coarsens MAX into weekly/monthly candles. Their timestamps
+  // denote bucket starts, so they cannot stand in for daily valuations.
+  const coarse = (value: MarketRecord) => value.historyInterval !== undefined && !["1d", "1h", "60m", "5m"].includes(value.historyInterval);
+  if (range === "MAX" && (coarse(record) || record.history.length < 2)) {
+    record = await request("1y", "1d");
+  }
+  if (longRange && instrument.assetType === "ETF" && (coarse(record) || record.history.length < 2)) {
+    const intraday = await request(range === "3M" ? "3mo" : "1y", "1h");
+    if (!coarse(intraday) && intraday.history.length > record.history.length) {
+      const closes = new Map<string, typeof intraday.history[number]>();
+      for (const point of intraday.history) closes.set(point.timestamp.slice(0, 10), point);
+      record = { ...intraday, history: [...closes.values()], historyInterval: "1d", historyDerivedFromIntraday: true };
+    }
+  }
+  if (longRange && coarse(record)) throw new Error("Yahoo has no daily history for this instrument");
+  return record;
 }
 
 export interface SearchResult {

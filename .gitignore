@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 dist/
+dist-pages-check/
 coverage/
 playwright-report/
 test-results/

@@ -15,7 +15,8 @@ interface ResolveOptions {
 }
 
 export function instrumentIdentity(instrument: Instrument): string {
-  return JSON.stringify([instrument.isin, instrument.micCode ?? instrument.exchange, instrument.currency, instrument.assetType, instrument.yahooSymbol ?? ""]);
+  // Invalidate old range-derived daily changes and aggregated MAX histories.
+  return JSON.stringify(["market-v2", instrument.isin, instrument.micCode ?? instrument.exchange, instrument.currency, instrument.assetType, instrument.yahooSymbol ?? ""]);
 }
 
 export function isMarketRecord(value: unknown): value is MarketRecord {

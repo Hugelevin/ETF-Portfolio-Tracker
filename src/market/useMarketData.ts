@@ -27,7 +27,7 @@ function hydrate(instruments: Instrument[], cache: Records) {
     if (!instrument || !isValidMarketRecord(value, instrument)) continue;
     const record = cachedRecord(value);
     charts[key] = record;
-    records[instrument.id] = newest(records[instrument.id], record);
+    if (key === cacheKey(instrument.id, "1W")) records[instrument.id] = record;
   }
   return { records, charts };
 }
@@ -67,7 +67,7 @@ export function useMarketData(instruments: Instrument[], proxyUrl: string, stora
       if (epoch.current !== version) return false;
       if (result.record) {
         const record = result.record;
-        setRecords((current) => {
+        if (range === "1W") setRecords((current) => {
           const selected = newest(current[instrument.id], record);
           // A failed refresh of this price must not leave an "Updated" badge.
           // A failure for older historical data must not downgrade a newer quote.

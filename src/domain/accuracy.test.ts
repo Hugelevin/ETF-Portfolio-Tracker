@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildPortfolioValueHistory, calculatePeriodPerformance, calculatePortfolioRiskStatistics, calculatePosition } from "./portfolio";
 import { filterHistoryForRange } from "../market/history";
 import { SAMPLE_PORTFOLIO } from "../config/samplePortfolio";
@@ -25,6 +25,18 @@ describe("calendar performance boundaries", () => {
 });
 
 describe("portfolio history accuracy", () => {
+  it("does not call the current month complete during its last trading day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-30T12:00:00Z"));
+    try {
+      const points = [
+        { timestamp: "2026-07-31T16:00:00Z", marketValue: 100 },
+        { timestamp: "2026-08-31T16:00:00Z", marketValue: 101 },
+        { timestamp: "2026-09-30T12:00:00Z", marketValue: 120 },
+      ].map((point) => ({ ...point, investedValue: 100, pricedPositions: 1 }));
+      expect(calculatePortfolioRiskStatistics(points).bestMonth?.month).toBe("2026-08");
+    } finally { vi.useRealTimers(); }
+  });
   const instrument = SAMPLE_PORTFOLIO.instruments[0]!;
   const position = calculatePosition(instrument, [{ ...SAMPLE_PORTFOLIO.lots[0]!, purchaseDate: "2026-01-01" }], null);
   it("orders unsorted prices, carries weekends, and stops valuing stale gaps", () => {

@@ -5,4 +5,4 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ALLOWED_ORIGINS = "https://hugelevin.github.io,http://localhost:*"
-ALLOWED_SYMBOLS = "ANAU-ETFP.MI,0P0001CD0Q.F,SPYY.DE,VVSM.DE,JEDI.DE,VWCE.DE,QUTM.DE,VUAA.DE"
+ALLOWED_SYMBOLS = "ANAU-ETFP.MI,ANAV.DE,0P0001CD0Q.F,SPYY.DE,VVSM.DE,JEDI.DE,VWCE.DE,QUTM.DE,VUAA.DE"

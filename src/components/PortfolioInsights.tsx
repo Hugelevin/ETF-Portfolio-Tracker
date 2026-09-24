@@ -52,7 +52,6 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
   const riskSufficient = riskHistory.length >= 2;
   const risk = useMemo(() => calculatePortfolioRiskStatistics(riskHistory), [riskHistory]);
   const missingRiskHistory = basePositions.filter((position) => (riskHistories[position.instrument.id]?.length ?? 0) < 2).map((position) => position.instrument.ticker);
-  const hourlyHistory = basePositions.filter((position) => getRecord(position.instrument.id, "MAX")?.historyDerivedFromIntraday).map((position) => position.instrument.ticker);
   const rangeFailures = basePositions.filter((position) => getError?.(position.instrument.id, range)).map((position) => position.instrument.ticker);
   const riskFailures = basePositions.filter((position) => getError?.(position.instrument.id, "MAX")).map((position) => position.instrument.ticker);
 
@@ -106,7 +105,6 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
         {!riskLoaded && <p className="risk-coverage" role="status">Complete historical prices are required for every EUR holding. Statistics remain unavailable until full history loads.</p>}
         {riskFailures.length > 0 && <p className="risk-coverage" role="status">Risk history refresh failed: {riskFailures.join(", ")}. Saved history is used where available.</p>}
         {riskLoaded && !riskSufficient && <p className="risk-coverage" role="status">{missingRiskHistory.length ? `Yahoo history is limited for ${missingRiskHistory.join(", ")}.` : "Not enough overlapping price history."} More historical prices are needed, not more visits to this app.</p>}
-        <details className="risk-methodology"><summary>How These Are Calculated</summary><p>Returns exclude broker fees and adjust for orders as end-of-day cash flows. Only completed calendar months with covered boundaries are compared. Statistics cover the dates shown, not necessarily your entire investing history. Yahoo may limit daily history to one year.</p>{hourlyHistory.length > 0 && <p>{hourlyHistory.join(", ")}: daily history uses the last available hourly price because Yahoo's daily feed is incomplete.</p>}</details>
         <dl className="risk-grid">
           <RiskStat label="Maximum Drawdown" value={formatDrawdown(risk.maximumDrawdownPercentage)} detail="Largest peak-to-trough fall" tone="negative" />
           <RiskStat label="Current Drawdown" value={formatDrawdown(risk.currentDrawdownPercentage)} detail="Distance below previous peak" tone={risk.currentDrawdownPercentage !== null && risk.currentDrawdownPercentage < 0 ? "negative" : "neutral"} />

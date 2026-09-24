@@ -65,6 +65,51 @@ test("shows valued summary, holding and accessible detail", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Close details" })).toBeVisible();
 });
 
+test("keeps ANAU identity while using ANAV consistently without extra disclaimers", async ({ page }) => {
+  const anau = {
+    ...sample,
+    instruments: [{ id: "anau-milan-eur", name: "AXA IM Nasdaq 100 UCITS ETF", ticker: "ANAU", isin: "IE000QDFFK00", exchange: "Milan", micCode: "XMIL", currency: "EUR", assetType: "ETF", yahooSymbol: "ANAU-ETFP.MI" }],
+    lots: [{ ...sample.lots[0]!, instrumentId: "anau-milan-eur", shares: 10, pricePerShare: 20 }],
+  };
+  await page.addInitScript((portfolio) => localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify(portfolio)), anau);
+  const requestedSymbols: string[] = [];
+  await page.route("http://market.test/yahoo/chart**", async (route) => {
+    const url = new URL(route.request().url());
+    const symbol = url.searchParams.get("symbol");
+    requestedSymbols.push(symbol ?? "");
+    const reference = symbol === "ANAV.DE";
+    const dates = reference ? ["2026-06-13", "2026-07-06", "2026-07-13"] : ["2026-07-09", "2026-07-10", "2026-07-13"];
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { result: [{
+      meta: { symbol, currency: "EUR", fullExchangeName: reference ? "XETRA" : "Milan", instrumentType: "ETF", dataGranularity: reference ? "1d" : "5m", regularMarketPrice: reference ? 24 : 22, regularMarketTime: Date.parse("2026-07-13T15:00:00Z") / 1000, regularMarketPreviousClose: 23 },
+      timestamp: dates.map((date) => Date.parse(`${date}T15:00:00Z`) / 1000), indicators: { quote: [{ close: reference ? [21, 22, 24] : [23, 23, 22] }] },
+    }] } } });
+  });
+  await page.goto("/");
+  const card = page.locator(".holding-card, .holdings-section tbody tr").first();
+  await expect(card).toContainText("€240.00");
+  await expect(card).toContainText("€10.00");
+  await page.getByRole("button", { name: "Open ANAU details" }).click();
+  await expect(page.locator(".detail-identity")).toContainText("ANAU");
+  await expect(page.locator(".detail-identity")).toContainText("Milan");
+  for (const range of ["1D", "1M", "3M", "1Y", "MAX"]) {
+    await page.getByRole("button", { name: range, exact: true }).click();
+    await expect(page.locator(".chart-panel .chart-empty")).toHaveCount(0);
+    await expect(page.locator(".quote-strip > div").first()).toContainText("€24.00");
+    await expect(page.locator(".quote-strip > div").first()).toContainText("€10.00");
+  }
+  await expect(page.locator(".period-performance")).toContainText("+14.29%");
+  await expect(page.getByRole("dialog")).not.toContainText("ANAV");
+  await page.getByRole("button", { name: "Close details" }).click();
+  await page.locator(".portfolio-insights > summary").click();
+  await expect(page.locator(".risk-panel")).toBeVisible();
+  await expect(page.locator(".portfolio-insights")).not.toContainText("ANAV");
+  await expect(card).toContainText("€240.00");
+  await expect(card).toContainText("€10.00");
+  expect(requestedSymbols.length).toBeGreaterThanOrEqual(6);
+  expect(new Set(requestedSymbols)).toEqual(new Set(["ANAV.DE"]));
+  await expect(page.getByText("How These Are Calculated", { exact: true })).toHaveCount(0);
+});
+
 test("order form is keyboard reachable", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Add Order" }).focus();
@@ -539,11 +584,8 @@ test("shows contribution-adjusted risk statistics in portfolio insights", async 
     await expect(risk.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(risk).toContainText("2 recovered drawdowns");
-  const methodology = risk.locator(".risk-methodology");
-  await expect(methodology).not.toHaveAttribute("open", "");
-  await expect(methodology.locator("p").first()).not.toBeVisible();
-  await methodology.locator("summary").click();
-  await expect(methodology.locator("p").first()).toBeVisible();
+  await expect(risk.getByText("How These Are Calculated")).toHaveCount(0);
+  await expect(risk.locator(".risk-methodology")).toHaveCount(0);
   await expect(risk.locator(".risk-heading")).toContainText("daily observations");
 });
 

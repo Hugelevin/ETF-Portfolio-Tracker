@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "./index";
+import { readFileSync } from "node:fs";
 
 const env: Env = {
   ALLOWED_ORIGINS: "https://hugelevin.github.io,http://localhost:*",
-  ALLOWED_SYMBOLS: "ANAU-ETFP.MI,0P0001CD0Q.F,SPYY.DE,VVSM.DE,JEDI.DE,VWCE.DE,QUTM.DE,VUAA.DE",
+  ALLOWED_SYMBOLS: "ANAU-ETFP.MI,ANAV.DE,0P0001CD0Q.F,SPYY.DE,VVSM.DE,JEDI.DE,VWCE.DE,QUTM.DE,VUAA.DE",
 };
 class TestSpan {
   get isTraced() { return false; }
@@ -24,6 +25,15 @@ const context: ExecutionContext = {
 
 describe("market-data Worker", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it.each(["default", "deployed"])("allows ANAV reference history with the %s allowlist", async (configuration) => {
+    const symbols = configuration === "default" ? "" : readFileSync("wrangler.toml", "utf8").match(/ALLOWED_SYMBOLS = "([^"]+)"/)![1]!;
+    vi.stubGlobal("caches", { default: { match: vi.fn().mockResolvedValue(undefined), put: vi.fn().mockResolvedValue(undefined) } });
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ chart: { result: [] } })));
+    vi.stubGlobal("fetch", fetcher);
+    const response = await worker.fetch(new Request("https://worker.test/yahoo/chart?symbol=ANAV.DE&range=1y&interval=1d"), { ...env, ALLOWED_SYMBOLS: symbols }, context);
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[0]![0])).toContain("/ANAV.DE?range=1y&interval=1d");
+  });
   it("reports health with CORS for the configured Pages origin", async () => {
     const response = await worker.fetch(new Request("https://worker.test/health", {
       headers: { Origin: "https://hugelevin.github.io" },

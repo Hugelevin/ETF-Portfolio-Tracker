@@ -1,5 +1,7 @@
 import type { ChartRange, Instrument, MarketRecord } from "../types";
-import { parseYahooChart } from "./yahoo";
+import { MissingYahooHistoryError, parseYahooChart } from "./yahoo";
+import { marketDataSourceInstrument } from "./marketDataSource";
+import { instrumentIdentity } from "./service";
 
 const RANGE_QUERY: Record<ChartRange, { range: string; interval: string }> = {
   "1D": { range: "1d", interval: "5m" },
@@ -64,16 +66,27 @@ export async function fetchYahooRecord(
   signal?: AbortSignal,
 ): Promise<MarketRecord> {
   if (!instrument.yahooSymbol) throw new Error("No Yahoo Finance symbol is configured for this instrument");
+  const longRange = range === "3M" || range === "1Y" || range === "MAX";
+  const sourceInstrument = marketDataSourceInstrument(instrument);
   const query = instrument.assetType === "FUND" ? FUND_RANGE_QUERY[range] : RANGE_QUERY[range];
   const request = async (providerRange: string, interval: string) => {
     const url = endpoint(proxyUrl, "/yahoo/chart");
-    url.searchParams.set("symbol", instrument.yahooSymbol!);
+    url.searchParams.set("symbol", sourceInstrument.yahooSymbol!);
     url.searchParams.set("range", providerRange);
     url.searchParams.set("interval", interval);
-    return parseYahooChart(instrument, await fetchJson(url, { signal }));
+    return parseYahooChart(sourceInstrument, await fetchJson(url, { signal }));
   };
-  let record = await request(query.range, query.interval);
-  const longRange = range === "3M" || range === "1Y" || range === "MAX";
+  let record: MarketRecord;
+  try {
+    record = await request(query.range, query.interval);
+  } catch (error) {
+    if (range !== "1D" || instrument.assetType !== "ETF" || !(error instanceof MissingYahooHistoryError)) throw error;
+    // Before the exchange opens, Yahoo may return an empty 1D window.
+    // Show only the most recent available session, from the same data source.
+    record = await request("5d", "5m");
+    const latestDate = record.history.at(-1)!.timestamp.slice(0, 10);
+    record = { ...record, history: record.history.filter((point) => point.timestamp.slice(0, 10) === latestDate) };
+  }
   // Yahoo silently coarsens MAX into weekly/monthly candles. Their timestamps
   // denote bucket starts, so they cannot stand in for daily valuations.
   const coarse = (value: MarketRecord) => value.historyInterval !== undefined && !["1d", "1h", "60m", "5m"].includes(value.historyInterval);
@@ -89,7 +102,7 @@ export async function fetchYahooRecord(
     }
   }
   if (longRange && coarse(record)) throw new Error("Yahoo has no daily history for this instrument");
-  return record;
+  return { ...record, identity: instrumentIdentity(instrument) };
 }
 
 export interface SearchResult {

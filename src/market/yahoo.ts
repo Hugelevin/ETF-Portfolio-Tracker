@@ -3,6 +3,10 @@ import { instrumentIdentity } from "./service";
 
 type UnknownRecord = Record<string, unknown>;
 
+export class MissingYahooHistoryError extends Error {
+  constructor() { super("Yahoo returned no valid timestamped prices"); }
+}
+
 const isRecord = (value: unknown): value is UnknownRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -107,7 +111,7 @@ export function parseYahooChart(
   assertIdentity(instrument, meta);
   const history = toHistory(result);
   const latest = history.at(-1);
-  if (!latest) throw new Error("Yahoo returned no valid timestamped prices");
+  if (!latest) throw new MissingYahooHistoryError();
 
   const fetchedMs = Date.parse(fetchedAt);
   const hasCurrentQuote = finitePositive(meta.regularMarketPrice) && finitePositive(meta.regularMarketTime);

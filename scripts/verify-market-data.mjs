@@ -1,20 +1,27 @@
 import { readFile } from "node:fs/promises";
 
 const [file = "outputs/private-portfolio-import-template.json", proxy = ""] = process.argv.slice(2);
+async function loadTypeScriptModule(relativePath) {
+  const ts = await import("typescript");
+  const source = await readFile(new URL(relativePath, import.meta.url), "utf8");
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+}
+
 async function loadPortfolio() {
   if (file !== "--catalog") return JSON.parse(await readFile(file, "utf8"));
   // The checked-in catalogue contains identities only, never personal orders.
-  const ts = await import("typescript");
-  const source = await readFile(new URL("../src/config/instruments.ts", import.meta.url), "utf8");
-  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-  const { VERIFIED_INSTRUMENTS } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+  const { VERIFIED_INSTRUMENTS } = await loadTypeScriptModule("../src/config/instruments.ts");
   return { instruments: VERIFIED_INSTRUMENTS };
 }
 const portfolio = await loadPortfolio();
+const { marketDataSourceInstrument } = await loadTypeScriptModule("../src/market/marketDataSource.ts");
 if (!Array.isArray(portfolio.instruments)) throw new Error("Template has no instruments array");
 
 const results = [];
-for (const instrument of portfolio.instruments) {
+for (const holding of portfolio.instruments) {
+  // Validate the actual app data source while keeping the owned ticker in output.
+  const instrument = { ...marketDataSourceInstrument(holding), ticker: holding.ticker };
   if (!instrument.yahooSymbol) {
     results.push({ ticker: instrument.ticker, isin: instrument.isin, symbol: "Missing", ok: false, providerVenue: instrument.exchange, currency: instrument.currency, latestTimestamp: null, error: "Yahoo symbol missing" });
     continue;

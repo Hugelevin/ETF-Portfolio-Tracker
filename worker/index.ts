@@ -1,5 +1,6 @@
 const DEFAULT_SYMBOLS = [
   "ANAU-ETFP.MI",
+  "ANAV.DE",
   "0P0001CD0Q.F",
   "SPYY.DE",
   "VVSM.DE",

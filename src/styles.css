@@ -184,11 +184,6 @@ td > strong, td > small { display: block; }
 .risk-heading small { margin-top: .15rem; color: var(--muted); font-size: .7rem; line-height: 1.35; }
 .risk-heading .button { min-height: 44px; flex: 0 0 auto; font-size: .76rem; }
 .risk-coverage { margin: .75rem 0 0; padding: .65rem .75rem; border-radius: 9px; color: var(--amber); background: var(--amber-soft); font-size: .72rem; line-height: 1.4; }
-.risk-methodology { margin-top: .5rem; color: var(--muted); font-size: .72rem; line-height: 1.5; }
-.risk-methodology summary { min-height: 44px; display: flex; align-items: center; gap: .4rem; width: fit-content; cursor: pointer; color: var(--green); font-weight: 700; }
-.risk-methodology summary::before { content: "+"; font-size: 1rem; }
-.risk-methodology[open] summary::before { content: "−"; }
-.risk-methodology p { margin: .25rem 0 .65rem; max-width: 75ch; }
 .history-method-note { margin: .5rem 0; color: var(--muted); font-size: .72rem; }
 .risk-grid { margin: 1rem 0 0; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .65rem; }
 .risk-stat { min-width: 0; padding: .8rem; border: 1px solid var(--line); border-radius: 11px; background: #f7faf9; }

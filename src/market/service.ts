@@ -1,4 +1,5 @@
 import type { Instrument, MarketRecord } from "../types";
+import { marketDataSourceInstrument } from "./marketDataSource";
 
 export type MarketAvailability = "available" | "cached" | "unavailable";
 
@@ -16,7 +17,11 @@ interface ResolveOptions {
 
 export function instrumentIdentity(instrument: Instrument): string {
   // Invalidate old range-derived daily changes and aggregated MAX histories.
-  return JSON.stringify(["market-v2", instrument.isin, instrument.micCode ?? instrument.exchange, instrument.currency, instrument.assetType, instrument.yahooSymbol ?? ""]);
+  const identity = ["market-v2", instrument.isin, instrument.micCode ?? instrument.exchange, instrument.currency, instrument.assetType, instrument.yahooSymbol ?? ""];
+  const source = marketDataSourceInstrument(instrument);
+  // Invalidate old ANAU quotes/history together so exchanges cannot mix in cache.
+  if (source !== instrument) identity.push(`market-source:${source.yahooSymbol}:${source.micCode}`);
+  return JSON.stringify(identity);
 }
 
 export function isMarketRecord(value: unknown): value is MarketRecord {

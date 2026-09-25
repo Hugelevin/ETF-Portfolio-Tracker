@@ -589,6 +589,36 @@ test("shows contribution-adjusted risk statistics in portfolio insights", async 
   await expect(risk.locator(".risk-heading")).toContainText("daily observations");
 });
 
+test("shows annualised return for mixed ETF and NAV dates without changing the dashboard", async ({ page }) => {
+  const fund = { id: "fund", name: "UBS Money Market Fund", ticker: "UMMEPSA", isin: "IE00BWWCR731", exchange: "Moneybase Cash Fund", currency: "EUR", assetType: "FUND", yahooSymbol: "0P0001CD0Q.F" };
+  const portfolio = { ...sample, instruments: [...sample.instruments, fund], lots: [
+    { ...sample.lots[0]!, shares: 1, pricePerShare: 100, purchaseDate: "2025-07-13", fees: 20 },
+    { id: "fund-lot", instrumentId: fund.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-07-13", fees: 10 },
+  ] };
+  await page.addInitScript((value) => localStorage.setItem("etf-tracker.portfolio.v1", JSON.stringify(value)), portfolio);
+  await page.route("http://market.test/yahoo/chart**", async (route) => {
+    const url = new URL(route.request().url());
+    const isFund = url.searchParams.get("symbol") === fund.yahooSymbol;
+    const dates = isFund ? ["2026-07-10", "2026-07-13"] : ["2026-07-10", "2026-07-13", "2026-07-14"];
+    const closes = isFund ? [101, 102] : [115, 118, 150];
+    await route.fulfill({ headers: { "access-control-allow-origin": "*" }, json: { chart: { result: [{
+      meta: { symbol: url.searchParams.get("symbol"), currency: "EUR", fullExchangeName: isFund ? "Frankfurt" : "XETRA", instrumentType: isFund ? "MUTUALFUND" : "ETF", dataGranularity: "1d", regularMarketPrice: closes.at(-1), regularMarketTime: Date.parse(`${dates.at(-1)}T16:00:00Z`) / 1000, previousClose: closes.at(-2) },
+      timestamp: dates.map((date) => Date.parse(`${date}T16:00:00Z`) / 1000), indicators: { quote: [{ close: closes }] },
+    }] } } });
+  });
+  await page.goto("/");
+  await expect(page.getByLabel("2 of 2 EUR positions valued")).toBeVisible();
+  const before = await page.locator(".summary-grid").innerText();
+  await page.locator(".portfolio-insights > summary").click();
+  const pill = page.locator(".annualised-return");
+  await expect(pill).toContainText("+10.00%");
+  await expect(pill).toContainText("As of 13 Jul 2026");
+  await expect(pill).not.toContainText("Not Enough History");
+  await expect(page.locator(".summary-grid")).toHaveText(before, { useInnerText: true });
+  const fits = await pill.evaluate((element) => element.scrollWidth <= element.clientWidth);
+  expect(fits).toBe(true);
+});
+
 test("keeps today's quote stable after opening historical charts and after reload", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByLabel("1 of 1 EUR positions valued")).toBeVisible();

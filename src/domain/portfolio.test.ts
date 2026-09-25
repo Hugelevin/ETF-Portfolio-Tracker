@@ -431,6 +431,64 @@ describe("calculateHistoryPerformance", () => {
 });
 
 describe("calculateMoneyWeightedReturn", () => {
+  it("does not carry prices across gaps to invent a shared valuation", () => {
+    const secondInstrument = { ...instrument, id: "second" };
+    const positions = [instrument, secondInstrument].map((item) => calculatePosition(item, [
+      { id: item.id, instrumentId: item.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 0 },
+    ], { ...quote, instrumentId: item.id }));
+    const histories = {
+      [instrument.id]: [{ timestamp: "2026-01-01T16:00:00Z", close: 110 }],
+      [secondInstrument.id]: [{ timestamp: "2026-01-02T08:00:00Z", close: 110 }],
+    };
+    expect(calculateMoneyWeightedReturn(positions, undefined, histories)).toBeNull();
+    expect(calculateMoneyWeightedReturn(positions, "2026-01-02", histories)).toBeNull();
+    expect(calculateMoneyWeightedReturn(positions, undefined, { ...histories, [secondInstrument.id]: [] })).toBeNull();
+  });
+
+  it("can use historical valuation even when the latest quote is unavailable", () => {
+    const position = calculatePosition(instrument, [
+      { id: "one", instrumentId: instrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 50 },
+    ], null);
+    const result = calculateMoneyWeightedReturn([position], undefined, {
+      [instrument.id]: [{ timestamp: "2026-01-01T16:00:00Z", close: 110 }, { timestamp: "2026-01-02T16:00:00Z", close: NaN }],
+    });
+    expect(result?.percentage).toBeCloseTo(10, 5);
+    expect(result?.valuationDate).toBe("2026-01-01");
+  });
+
+  it("does not annualise orders made only on the shared valuation date", () => {
+    const position = calculatePosition(instrument, [
+      { id: "one", instrumentId: instrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2026-01-01", fees: 0 },
+    ], null);
+    expect(calculateMoneyWeightedReturn([position], undefined, {
+      [instrument.id]: [{ timestamp: "2026-01-01T16:00:00Z", close: 110 }],
+    })).toBeNull();
+  });
+
+  it("values mixed-date ETF and fund quotes on the latest shared historical day", () => {
+    const fund = { ...instrument, id: "fund", assetType: "FUND" as const };
+    const first = calculatePosition(instrument, [
+      { id: "one", instrumentId: instrument.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 8 },
+      { id: "new", instrumentId: instrument.id, shares: 5, pricePerShare: 120, purchaseDate: "2026-01-02", fees: 8 },
+    ], { ...quote, price: 150, asOf: "2026-01-02T16:00:00Z" });
+    const second = calculatePosition(fund, [
+      { id: "two", instrumentId: fund.id, shares: 1, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 8 },
+    ], { ...quote, instrumentId: fund.id, price: 102, asOf: "2026-01-01T08:00:00Z" });
+    const histories = {
+      [instrument.id]: [
+        { timestamp: "2026-01-02T16:00:00Z", close: 150 },
+        { timestamp: "2026-01-01T16:00:00Z", close: 118 },
+        { timestamp: "2026-01-01T08:00:00Z", close: 116 },
+      ],
+      [fund.id]: [{ timestamp: "2026-01-01T08:00:00Z", close: 102 }],
+    };
+    const before = JSON.stringify([first, second, histories]);
+    const result = calculateMoneyWeightedReturn([first, second], undefined, histories);
+    expect(result?.percentage).toBeCloseTo(10, 5);
+    expect(result?.valuationDate).toBe("2026-01-01");
+    expect(JSON.stringify([first, second, histories])).toBe(before);
+  });
+
   it("annualises portfolio cash flows before broker fees", () => {
     const position = calculatePosition(instrument, [
       { id: "lot", instrumentId: instrument.id, shares: 10, pricePerShare: 100, purchaseDate: "2025-01-01", fees: 25 },

@@ -34,7 +34,6 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
     .filter((position) => position.currentValue !== null)
     .sort((left, right) => (right.currentValue ?? 0) - (left.currentValue ?? 0)), [basePositions]);
   const total = allocation.reduce((sum, position) => sum + (position.currentValue ?? 0), 0);
-  const moneyWeightedReturn = useMemo(() => calculateMoneyWeightedReturn(basePositions), [basePositions]);
   const histories = useMemo(() => Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, range)?.history ?? []])), [basePositions, getRecord, range]);
   const complete = basePositions.length > 0 && basePositions.every((position) => histories[position.instrument.id]?.length);
   const history = useMemo(() => complete ? buildPortfolioValueHistory(basePositions, histories, baseCurrency) : [], [complete, basePositions, histories, baseCurrency]);
@@ -47,6 +46,8 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
   const latestReturn = returnHistory.at(-1)?.returnPercentage ?? null;
   const riskKey = basePositions.map((position) => position.instrument.id).sort().join("|");
   const riskHistories = useMemo(() => Object.fromEntries(basePositions.map((position) => [position.instrument.id, getRecord(position.instrument.id, "MAX")?.history ?? []])), [basePositions, getRecord]);
+  const currentMoneyWeightedReturn = useMemo(() => calculateMoneyWeightedReturn(basePositions), [basePositions]);
+  const moneyWeightedReturn = useMemo(() => currentMoneyWeightedReturn ?? calculateMoneyWeightedReturn(basePositions, undefined, riskHistories), [currentMoneyWeightedReturn, basePositions, riskHistories]);
   const riskLoaded = basePositions.length > 0 && basePositions.every((position) => riskHistories[position.instrument.id]?.length);
   const riskHistory = useMemo(() => riskLoaded ? buildPortfolioValueHistory(basePositions, riskHistories, baseCurrency) : [], [riskLoaded, basePositions, riskHistories, baseCurrency]);
   const riskSufficient = riskHistory.length >= 2;
@@ -76,7 +77,7 @@ function InsightsContent({ positions, baseCurrency, loading, getRecord, getError
   return <div className="insights-body">
       <section className="allocation-panel" aria-labelledby="allocation-title">
         <div className="insight-heading"><div><p className="eyebrow">Allocation</p><h3 id="allocation-title">Current Value by Holding</h3></div><strong>{formatMoney(total, baseCurrency)}</strong></div>
-        <div className="annualised-return"><span>Annualised Return</span><strong className={moneyWeightedReturn !== null ? (moneyWeightedReturn.percentage < 0 ? "negative-text" : "positive-text") : undefined}>{moneyWeightedReturn !== null ? formatPercent(moneyWeightedReturn.percentage) : "Not Enough History"}</strong><small>Cash-flow weighted · Before fees</small></div>
+        <div className="annualised-return"><span>Annualised Return</span><strong className={moneyWeightedReturn !== null ? (moneyWeightedReturn.percentage < 0 ? "negative-text" : "positive-text") : undefined}>{moneyWeightedReturn !== null ? formatPercent(moneyWeightedReturn.percentage) : loading ? "Loading" : "Unavailable"}</strong><small>Cash-flow weighted · Before fees{moneyWeightedReturn && !currentMoneyWeightedReturn ? ` · As of ${formatDate(moneyWeightedReturn.valuationDate)}` : ""}</small></div>
         <p className="allocation-coverage">{allocation.length}/{basePositions.length} {baseCurrency} holdings priced{excluded.length ? ` · Excludes ${excluded.map((position) => position.instrument.ticker).join(", ")}` : ""}</p>
         <div className="allocation-bars">{allocation.map((position) => {
           const percentage = total > 0 ? (position.currentValue ?? 0) / total * 100 : 0;

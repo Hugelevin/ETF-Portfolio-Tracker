@@ -241,15 +241,18 @@ export function calculateHistoryPerformance(
 export function calculateMoneyWeightedReturn(
   positions: PositionMetrics[],
   valuationDate?: string,
+  histories?: Record<string, MarketPoint[]>,
 ): MoneyWeightedReturn | null {
-  if (!positions.length || positions.some((position) => position.currentValue === null)) return null;
+  if (!positions.length) return null;
+  const historical = histories ? sharedHistoricalValuation(positions, histories, valuationDate) : null;
+  if (histories && !historical) return null;
+  if (!histories && positions.some((position) => position.currentValue === null)) return null;
   const quoteDates = positions.map((position) => position.quote?.asOf.slice(0, 10));
-  if (quoteDates.some((date) => !date || !Number.isFinite(Date.parse(`${date}T00:00:00Z`)))) return null;
-  const resolvedValuationDate = valuationDate ?? quoteDates[0];
+  const resolvedValuationDate = historical?.date ?? valuationDate ?? quoteDates[0];
   if (!resolvedValuationDate) return null;
-  // XIRR requires one coherent valuation date. Mixed cached quote dates cannot
-  // be treated as a single terminal portfolio value without historical FX/price reconstruction.
-  if (quoteDates.some((date) => date !== resolvedValuationDate)) return null;
+  // Never apply today's ETF price to an earlier fund NAV date. Historical
+  // valuations use actual prices recorded on one shared day for every holding.
+  if (!historical && quoteDates.some((date) => date !== resolvedValuationDate)) return null;
   const valuationTime = Date.parse(`${resolvedValuationDate}T00:00:00Z`);
   if (!Number.isFinite(valuationTime)) return null;
 
@@ -260,11 +263,11 @@ export function calculateMoneyWeightedReturn(
       byDate.set(lot.purchaseDate, (byDate.get(lot.purchaseDate) ?? 0) - lot.shares * lot.pricePerShare);
     }
   }
-  const currentValue = positions.reduce((sum, position) => {
+  const currentValue = positions.reduce((sum, position, index) => {
     const sharesOwned = position.lots
       .filter((lot) => lot.purchaseDate <= resolvedValuationDate)
       .reduce((shareSum, lot) => shareSum + lot.shares, 0);
-    return sum + sharesOwned * (position.quote?.price ?? 0);
+    return sum + sharesOwned * (historical?.prices[index] ?? position.quote?.price ?? 0);
   }, 0);
   byDate.set(resolvedValuationDate, (byDate.get(resolvedValuationDate) ?? 0) + currentValue);
   const flows = [...byDate.entries()]
@@ -302,6 +305,27 @@ export function calculateMoneyWeightedReturn(
   }
   const rate = (low + high) / 2;
   return Number.isFinite(rate) ? { percentage: rate * 100, valuationDate: resolvedValuationDate } : null;
+}
+
+function sharedHistoricalValuation(
+  positions: PositionMetrics[],
+  histories: Record<string, MarketPoint[]>,
+  valuationDate?: string,
+): { date: string; prices: number[] } | null {
+  const dailyPrices = positions.map((position) => {
+    const days = new Map<string, MarketPoint>();
+    for (const point of histories[position.instrument.id] ?? []) {
+      if (!Number.isFinite(Date.parse(point.timestamp)) || !Number.isFinite(point.close) || point.close <= 0) continue;
+      const date = point.timestamp.slice(0, 10);
+      const previous = days.get(date);
+      if (!previous || Date.parse(point.timestamp) > Date.parse(previous.timestamp)) days.set(date, point);
+    }
+    return days;
+  });
+  const candidates = valuationDate ? [valuationDate] : [...(dailyPrices[0]?.keys() ?? [])].sort().reverse();
+  const date = candidates.find((candidate) => dailyPrices.every((prices) => prices.has(candidate)));
+  if (!date) return null;
+  return { date, prices: dailyPrices.map((prices) => prices.get(date)!.close) };
 }
 
 export function buildPositionValueHistory(
